@@ -1,0 +1,42 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "next",
+      "displayName": "SchedMesh next-generation development",
+      "binaryDir": "${sourceDir}/build/next",
+      "cacheVariables": {
+        "SCHEDMESH_BUILD_LEGACY": "ON",
+        "SCHEDMESH_BUILD_TESTS": "ON",
+        "SCHEDMESH_FETCH_DEPENDENCIES": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "next-release",
+      "configurePreset": "next",
+      "configuration": "Release",
+      "targets": [
+        "schedmesh-next",
+        "schedmesh-next-tests",
+        "SchedMesh"
+      ]
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "next-release",
+      "configurePreset": "next",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

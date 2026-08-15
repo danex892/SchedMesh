@@ -8,7 +8,13 @@ Its first release must prove that the historical scheduling problem has finally 
 
 ## Background
 
-The repository contains an earlier C++ timetable generator, configuration for two sessions, school-specific rules, classroom mappings, and a historical `input5-11.csv` dataset. This code and data are the acceptance origin of the new Python, PySide6, and OR-Tools implementation.
+The repository contains an earlier C++ timetable generator, configuration for two sessions, school-specific rules, classroom mappings, and a historical `input5-11.csv` dataset. This code and data are the acceptance origin of the new C++20 and OR-Tools CP-SAT implementation.
+
+The detailed engineering blueprint is documented in
+[`CPP_CP_SAT_REWRITE_PLAN.md`](CPP_CP_SAT_REWRITE_PLAN.md). It supersedes the earlier
+Python/PySide6 implementation choice while preserving the product goals in this
+roadmap. The first application surface will be a C++ CLI; a Qt 6 desktop application
+is planned only after solver acceptance.
 
 The legacy implementation should remain available as provenance and as a source of domain rules. It should not be silently deleted or rewritten out of the project's history.
 
@@ -37,7 +43,7 @@ SchedMesh may be tagged `v1.0.0` when all of the following are true:
 2. Every historical hard rule, including sessions, availability, room conflicts, subject conflicts, double lessons, first/last-period restrictions, and required weekly lesson counts, has an explicit representation and validator test.
 3. The OR-Tools CP-SAT solver produces a schedule for the historical acceptance dataset, and the independent validator reports zero hard violations.
 4. The result includes solver status, solve time, objective value, best bound where available, and a human-readable breakdown of every soft-objective component.
-5. The PySide6 desktop application loads the historical project, starts and cancels solving without freezing, displays the schedule, supports one validated manual move with undo/redo, and exports the result.
+5. The Qt 6 desktop application loads the historical project, starts and cancels solving without freezing, displays the schedule, supports one validated manual move with undo/redo, and exports the result.
 6. Invalid manual edits are rejected or clearly highlighted with precise diagnostics from the same validator.
 7. CI runs formatting, type checks, domain tests, validator tests, deterministic solver fixtures, serialization tests, and package builds.
 8. A tagged release contains an installable desktop artifact, the historical acceptance fixture, validation report, screenshots, architecture documentation, and the killer demo.
@@ -120,7 +126,7 @@ SchedMesh may be tagged `v1.0.0` when all of the following are true:
 
 ### M4 — Deliver the Desktop Workflow
 
-- Build PySide6 model/view editors and schedule views.
+- Build Qt 6 model/view editors and schedule views.
 - Run solving outside the GUI thread or in a worker process.
 - Show status, elapsed time, cancellation, and result statistics.
 - Support a validated drag-and-drop move with conflict feedback.

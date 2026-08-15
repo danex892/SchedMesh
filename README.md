@@ -2,6 +2,11 @@
 
 School timetable generator for multi-class scheduling with teacher, room, and gym constraints.
 
+SchedMesh is being rewritten as a bounded and testable C++20 application powered by
+OR-Tools CP-SAT. The original C++17 generator remains available as the `SchedMesh`
+target while the new `schedmesh-next` target is developed in parallel. See the
+[roadmap](docs/ROADMAP.md) and [rewrite plan](docs/CPP_CP_SAT_REWRITE_PLAN.md).
+
 ## What It Does
 
 - Reads input data from CSV files.
@@ -11,30 +16,42 @@ School timetable generator for multi-class scheduling with teacher, room, and gy
 
 ## Project Layout
 
-- `src/` C++ sources and headers.
+- `include/schedmesh/` public headers for the new implementation.
+- `src/app/` and `src/solver/` new C++20 application and solver code.
+- `src/*.cpp` and `src/*.h` preserved legacy implementation.
+- `tests/` tests for the new implementation.
 - `data/` input and runtime files (`settings.conf`, CSVs, outputs).
 - `build/` local CMake build directory (generated).
 
 ## Requirements
 
-- CMake `>= 3.16`
-- C++17 compiler
-  - MSVC 2022+
-  - GCC/Clang with C++17 support
+- CMake `>= 3.24`
+- A C++20 compiler; MSVC 2022 or later is recommended on Windows.
+- Git and network access for the first configure when dependencies are not installed.
 
 ## Build
 
+The preset builds both the new executable and preserved legacy target. The first
+configure downloads the pinned OR-Tools 9.15 and GoogleTest 1.17 sources and can
+take several minutes.
+
 ```powershell
-cd SchedMesh
-cmake -S . -B build
-cmake --build build -j
+cmake --preset next
+cmake --build --preset next-release -j 4
+ctest --preset next-release
 ```
 
 ## Run
 
 ```powershell
-cd SchedMesh
-.\build\Debug\SchedMesh.exe
+.\build\next\Release\schedmesh-next.exe --version
+.\build\next\Release\schedmesh-next.exe solve-smoke
+```
+
+The legacy generator remains available at:
+
+```powershell
+.\build\next\Release\SchedMesh.exe data/settings.conf
 ```
 
 On non-Windows platforms, run the produced binary from `build/`.
