@@ -116,6 +116,9 @@ schedmesh_enable_clang_tidy(schedmesh-next)
 
 add_library(schedmesh-domain
     src/domain/calendar.cpp
+    src/import/legacy_project.cpp
+    src/import/legacy_settings.cpp
+    src/import/legacy_text.cpp
     src/io/project_json.cpp
     src/validation/project_validator.cpp
 )
@@ -159,6 +162,9 @@ if(SCHEDMESH_BUILD_TESTS)
         tests/app/validate_command_test.cpp
         tests/domain/domain_test.cpp
         tests/io/project_json_test.cpp
+        tests/import/legacy_text_test.cpp
+        tests/import/legacy_settings_test.cpp
+        tests/import/legacy_project_test.cpp
         tests/validation/project_validator_test.cpp
         src/app/validate_command.cpp
     )
@@ -166,7 +172,6 @@ if(SCHEDMESH_BUILD_TESTS)
     target_compile_features(schedmesh-domain-tests PRIVATE cxx_std_20)
     target_link_libraries(schedmesh-domain-tests PRIVATE GTest::gtest schedmesh-domain)
     schedmesh_enable_warnings(schedmesh-domain-tests)
-    schedmesh_copy_runtime_dependencies(schedmesh-domain-tests)
     schedmesh_enable_clang_tidy(schedmesh-domain-tests)
 
     include(GoogleTest)
