@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <numeric>
 #include <sstream>
 #include <string>
 
@@ -17,7 +18,10 @@ namespace {
 TEST(MigrateCommandTest, MigratesHistoricalFixtureToCanonicalJson) {
   const std::filesystem::path output_path =
       std::filesystem::temp_directory_path() / "schedmesh-migrated-project.json";
+  const std::filesystem::path second_output_path =
+      std::filesystem::temp_directory_path() / "schedmesh-migrated-project-second.json";
   std::filesystem::remove(output_path);
+  std::filesystem::remove(second_output_path);
   std::ostringstream output;
   std::ostringstream errors;
 
@@ -35,8 +39,37 @@ TEST(MigrateCommandTest, MigratesHistoricalFixtureToCanonicalJson) {
   EXPECT_FALSE(project.project->teachers.empty());
   EXPECT_FALSE(project.project->meetings.empty());
   EXPECT_FALSE(project.project->rooms.empty());
+  EXPECT_EQ(project.project->student_groups.size(), 27U);
+  EXPECT_EQ(project.project->teachers.size(), 39U);
+  EXPECT_EQ(project.project->subjects.size(), 40U);
+  EXPECT_EQ(project.project->rooms.size(), 37U);
+  EXPECT_EQ(project.project->meetings.size(), 947U);
+  EXPECT_EQ(project.project->calendar.periods.size(), 13U);
+  EXPECT_EQ(project.project->calendar.slots.size(), 78U);
+  const int meeting_periods =
+      std::accumulate(project.project->meetings.begin(), project.project->meetings.end(), 0,
+                      [](int total, const domain::Meeting& meeting) {
+                        return total + meeting.duration_in_periods;
+                      });
+  EXPECT_EQ(meeting_periods, 964);
   EXPECT_NE(output.str().find("Migrated legacy project"), std::string::npos);
+  EXPECT_EQ(errors.str().find("error "), std::string::npos);
+  EXPECT_NE(errors.str().find("legacy.classrooms.special_code"), std::string::npos);
+  EXPECT_NE(errors.str().find("legacy.entire_course_per_day.unimplemented_legacy_setting"),
+            std::string::npos);
+
+  std::ostringstream second_output;
+  std::ostringstream second_errors;
+  ASSERT_EQ(migrate_legacy_project("data/settings.conf", second_output_path.string(), second_output,
+                                   second_errors),
+            kExitSuccess);
+  std::ifstream second_input(second_output_path, std::ios::binary);
+  const std::string second_contents{std::istreambuf_iterator<char>{second_input},
+                                    std::istreambuf_iterator<char>{}};
+  second_input.close();
+  EXPECT_EQ(second_contents, contents);
   std::filesystem::remove(output_path);
+  std::filesystem::remove(second_output_path);
 }
 
 }  // namespace

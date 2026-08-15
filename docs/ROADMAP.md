@@ -106,8 +106,12 @@ SchedMesh may be tagged `v1.0.0` when all of the following are true:
 
 ### M2 — Implement the Independent Validator
 
+**Status:** complete. See [M2 acceptance evidence](M2_ACCEPTANCE.md).
+
 - Validate teacher, class/group, and room exclusivity.
-- Validate availability, capacity, features, lesson counts, sessions, and special historical rules.
+- Validate availability, room features, lesson counts, sessions, and special historical rules.
+- Defer room-capacity enforcement until canonical projects can provide student-group sizes;
+  legacy inputs do not contain that data and migration must not invent it.
 - Calculate soft penalties independently from the solver objective.
 - Return structured diagnostics with entity and time-slot references.
 - Test valid, invalid, and boundary fixtures for every rule.
