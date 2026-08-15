@@ -35,6 +35,9 @@ jobs:
           -DSCHEDMESH_BUILD_TESTS=ON
           -DSCHEDMESH_FETCH_DEPENDENCIES=ON
       - name: Build
-        run: cmake --build build/ci --target schedmesh-next schedmesh-next-tests SchedMesh -j 2
+        run: >-
+          cmake --build build/ci
+          --target schedmesh-next schedmesh-next-tests schedmesh-domain-tests SchedMesh
+          -j 2
       - name: Test
         run: ctest --test-dir build/ci --output-on-failure
