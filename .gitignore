@@ -31,6 +31,11 @@
 *.out
 *.app
 
-# Local build and generated timetable exports
-build/
+# CMake and IDE build trees
+/build*/
+/out/
+/.vs/
+CMakeUserPresets.json
+
+# Local generated timetable exports
 timetable_rooms*.csv
