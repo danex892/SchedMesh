@@ -2,6 +2,7 @@
 #include <string_view>
 
 #include "ortools/base/version.h"
+#include "schedmesh/app/migrate_command.h"
 #include "schedmesh/app/validate_command.h"
 #include "schedmesh/solver/smoke_solver.h"
 
@@ -13,7 +14,8 @@ void print_version() {
 }
 
 void print_usage() {
-  std::cout << "Usage: schedmesh-next [--version|solve-smoke|validate <project.json>]\n";
+  std::cout << "Usage: schedmesh-next [--version|solve-smoke|validate <project.json>|"
+               "migrate-legacy <settings.conf> <project.json>]\n";
 }
 
 }  // namespace
@@ -36,6 +38,10 @@ int main(int argc, char* argv[]) {
 
   if (argc == 3 && std::string_view{argv[1]} == "validate") {
     return schedmesh::app::validate_project_file(argv[2], std::cout, std::cerr);
+  }
+
+  if (argc == 4 && std::string_view{argv[1]} == "migrate-legacy") {
+    return schedmesh::app::migrate_legacy_project(argv[2], argv[3], std::cout, std::cerr);
   }
 
   print_usage();

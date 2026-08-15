@@ -79,7 +79,13 @@ cmake --build --preset next-release
 .\build\next\Release\schedmesh-next.exe --version
 .\build\next\Release\schedmesh-next.exe solve-smoke
 .\build\next\Release\schedmesh-next.exe validate tests\fixtures\tiny_project.json
+.\build\next\Release\schedmesh-next.exe migrate-legacy data\settings.conf outputs\project.json
 ```
+
+`migrate-legacy` reads the timetable, classroom mapping, and optional methodical-day
+file referenced by the legacy configuration. It writes canonical project JSON only
+after every input has been parsed and migrated successfully. Legacy room codes whose
+facility identity cannot be inferred are reported as warnings for manual review.
 
 The legacy generator remains available at:
 

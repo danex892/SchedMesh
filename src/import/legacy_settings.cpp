@@ -9,6 +9,9 @@
 namespace schedmesh::import {
 namespace {
 
+constexpr int kMaximumDays = 31;
+constexpr int kMaximumLessonsPerSession = 48;
+
 constexpr std::array<std::string_view, 15> kRuntimeOnlyKeys = {
     "steps",       "debug",          "debug_fstpl",  "debug_file", "checkday",
     "bugday",      "bugclass",       "reset_days",   "errors_limit", "randtype",
@@ -92,8 +95,9 @@ LegacySettingsReadResult decode_legacy_settings(const LegacyConfig& config) {
   LegacySettings settings;
   result.report.source_records = config.values.size();
 
-  read_integer(config, "days", 1, 31, settings.days, result.report);
-  read_integer(config, "maxlessons", 1, 48, settings.maximum_lessons_per_session, result.report);
+  read_integer(config, "days", 1, kMaximumDays, settings.days, result.report);
+  read_integer(config, "maxlessons", 1, kMaximumLessonsPerSession,
+               settings.maximum_lessons_per_session, result.report);
   read_integer(config, "sessions", 1, 2, settings.sessions, result.report);
   int last_day_short = 0;
   if (read_integer(config, "last_day_short", 0, 1, last_day_short, result.report)) {

@@ -103,6 +103,7 @@ endif()
 
 add_executable(schedmesh-next
     src/app/main.cpp
+    src/app/migrate_command.cpp
     src/app/validate_command.cpp
     src/solver/smoke_solver.cpp
 )
@@ -159,6 +160,7 @@ if(SCHEDMESH_BUILD_TESTS)
 
     add_executable(schedmesh-domain-tests
         tests/test_main.cpp
+        tests/app/migrate_command_test.cpp
         tests/app/validate_command_test.cpp
         tests/domain/domain_test.cpp
         tests/io/project_json_test.cpp
@@ -166,6 +168,7 @@ if(SCHEDMESH_BUILD_TESTS)
         tests/import/legacy_settings_test.cpp
         tests/import/legacy_project_test.cpp
         tests/validation/project_validator_test.cpp
+        src/app/migrate_command.cpp
         src/app/validate_command.cpp
     )
     target_include_directories(schedmesh-domain-tests PRIVATE tests)

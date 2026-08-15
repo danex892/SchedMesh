@@ -78,6 +78,23 @@ std::vector<std::string> split_profiles(std::string_view value) {
   return result;
 }
 
+std::vector<std::string> split_semicolon_list(std::string_view value) {
+  std::vector<std::string> result;
+  std::size_t begin = 0;
+  do {
+    const std::size_t end = value.find(';', begin);
+    const std::string item = trim(value.substr(begin, end - begin));
+    if (!item.empty()) {
+      result.push_back(item);
+    }
+    if (end == std::string_view::npos) {
+      break;
+    }
+    begin = end + 1;
+  } while (true);
+  return result;
+}
+
 int grade_of(std::string_view group_name) {
   int grade{};
   const auto [end, error] =
@@ -132,14 +149,16 @@ LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings
 
   domain::Project project{.metadata = {.id = "legacy-import", .display_name = "Legacy import"}};
   std::vector<domain::Day> days;
+  days.reserve(static_cast<std::size_t>(settings.days));
   for (int index = 0; index < settings.days; ++index) {
     days.push_back({.id = "day-" + std::to_string(index + 1),
                     .display_name = settings.day_names[index],
                     .ordinal = index});
   }
   const int period_count = settings.sessions == 1 ? settings.maximum_lessons_per_session
-                                                   : settings.maximum_lessons_per_session * 2 - 1;
+                                                   : (settings.maximum_lessons_per_session * 2) - 1;
   std::vector<domain::Period> periods;
+  periods.reserve(static_cast<std::size_t>(period_count));
   for (int index = 0; index < period_count; ++index) {
     periods.push_back({.id = "period-" + std::to_string(index + 1), .ordinal = index});
   }
@@ -171,6 +190,7 @@ LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings
 
   std::map<std::string, std::size_t, std::less<>> teacher_indices;
   std::map<std::string, domain::SubjectId, std::less<>> subject_ids;
+  std::map<std::string, int, std::less<>> subject_occurrences;
   std::map<std::string, std::vector<std::size_t>, std::less<>> meeting_batches;
   std::string current_teacher;
   for (std::size_t row_index = 4; row_index < timetable.size(); ++row_index) {
@@ -210,10 +230,15 @@ LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings
                                   .display_name = current_teacher});
     }
     domain::Teacher& teacher = project.teachers[teacher_index];
-    const auto [subject_iterator, inserted] = subject_ids.try_emplace(
-        subject_name, domain::SubjectId{"subject-" + stable_component(subject_name)});
-    if (inserted) {
-      project.subjects.push_back({.id = subject_iterator->second, .display_name = subject_name});
+    auto subject_iterator = subject_ids.find(subject_name);
+    if (subject_iterator == subject_ids.end()) {
+      const std::string component = stable_component(subject_name);
+      const int occurrence = ++subject_occurrences[component];
+      const domain::SubjectId subject_id{
+          "subject-" + component +
+          (occurrence == 1 ? "" : "-" + std::to_string(occurrence))};
+      subject_iterator = subject_ids.emplace(subject_name, subject_id).first;
+      project.subjects.push_back({.id = subject_id, .display_name = subject_name});
     }
     const domain::SubjectId subject_id = subject_iterator->second;
     if (std::ranges::find(teacher.qualified_subjects, subject_id) == teacher.qualified_subjects.end()) {
@@ -266,6 +291,141 @@ LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings
         }
         teacher.maximum_weekly_load += *hours;
         ++result.report.consumed_fields;
+      }
+    }
+  }
+
+  if (result.report.ok()) {
+    result.project = std::move(project);
+  }
+  return result;
+}
+
+LegacyProjectImportResult import_legacy_resources(
+    domain::Project project, const CsvTable& classrooms,
+    const std::optional<CsvTable>& methodical_days) {
+  LegacyProjectImportResult result;
+  result.report.source_records =
+      classrooms.size() + (methodical_days ? methodical_days->size() : 0U);
+
+  std::map<std::string, domain::TeacherId, std::less<>> teachers;
+  for (const domain::Teacher& teacher : project.teachers) {
+    teachers.emplace(teacher.display_name, teacher.id);
+  }
+  std::map<std::string, domain::RoomId, std::less<>> rooms;
+
+  if (classrooms.empty() || classrooms.front().size() < 2 ||
+      trim(classrooms.front()[0]) != "Teacher" || trim(classrooms.front()[1]) != "Rooms") {
+    add_error(result.report, "legacy.classrooms.invalid_header", "/classrooms/rows/0",
+              "Classroom mapping must start with Teacher and Rooms columns.",
+              "Restore the legacy classroom CSV header.");
+  } else {
+    for (std::size_t row_index = 1; row_index < classrooms.size(); ++row_index) {
+      const CsvRow& row = classrooms[row_index];
+      if (row.size() < 2) {
+        add_error(result.report, "legacy.classrooms.missing_columns",
+                  "/classrooms/rows/" + std::to_string(row_index),
+                  "Classroom row must contain a teacher and room list.",
+                  "Add both required cells or remove the incomplete row.");
+        continue;
+      }
+      const std::string teacher_name = trim(row[0]);
+      const auto teacher = teachers.find(teacher_name);
+      if (teacher == teachers.end()) {
+        result.report.diagnostics.push_back(
+            {.severity = MigrationSeverity::kWarning,
+             .code = "legacy.classrooms.unknown_teacher",
+             .path = "/classrooms/rows/" + std::to_string(row_index) + "/teacher",
+             .message = "Classroom mapping references a teacher absent from the timetable: " +
+                        teacher_name,
+             .suggested_action = "Correct the teacher name or add the teacher to the timetable."});
+        continue;
+      }
+      const std::vector<std::string> room_names = split_semicolon_list(row[1]);
+      if (room_names.size() == 1 && (room_names.front() == "S" || room_names.front() == "T")) {
+        ++result.report.ignored_fields;
+        result.report.diagnostics.push_back(
+            {.severity = MigrationSeverity::kWarning,
+             .code = "legacy.classrooms.special_code",
+             .path = "/classrooms/rows/" + std::to_string(row_index) + "/rooms",
+             .message = "Legacy room code '" + room_names.front() +
+                        "' has no explicit facility identity and was not converted.",
+             .suggested_action = "Replace the code with canonical room candidates and features."});
+        continue;
+      }
+
+      std::vector<domain::RoomId> candidates;
+      for (const std::string& room_name : room_names) {
+        const auto [iterator, inserted] =
+            rooms.try_emplace(room_name, domain::RoomId{"room-" + stable_component(room_name)});
+        if (inserted) {
+          project.rooms.push_back({.id = iterator->second, .display_name = room_name});
+        }
+        candidates.push_back(iterator->second);
+      }
+      for (domain::Meeting& meeting : project.meetings) {
+        for (const domain::TeacherRequirement& requirement : meeting.teacher_requirements) {
+          if (requirement.fixed_teacher == teacher->second) {
+            meeting.room_requirements.push_back(
+                {.candidates = candidates, .lane = requirement.lane});
+          }
+        }
+      }
+      ++result.report.consumed_fields;
+    }
+  }
+
+  if (methodical_days) {
+    if (methodical_days->empty() || methodical_days->front().size() < 2 ||
+        trim(methodical_days->front()[0]) != "Teacher") {
+      add_error(result.report, "legacy.methodical_days.invalid_header", "/methodical_days/rows/0",
+                "Methodical-day mapping must start with a Teacher column and a day-list column.",
+                "Restore the legacy methodical-days CSV header.");
+    } else {
+      for (std::size_t row_index = 1; row_index < methodical_days->size(); ++row_index) {
+        const CsvRow& row = (*methodical_days)[row_index];
+        if (row.size() < 2) {
+          add_error(result.report, "legacy.methodical_days.missing_columns",
+                    "/methodical_days/rows/" + std::to_string(row_index),
+                    "Methodical-day row must contain a teacher and day list.",
+                    "Add both required cells or remove the incomplete row.");
+          continue;
+        }
+        const std::string teacher_name = trim(row[0]);
+        const auto teacher_id = teachers.find(teacher_name);
+        if (teacher_id == teachers.end()) {
+          result.report.diagnostics.push_back(
+              {.severity = MigrationSeverity::kWarning,
+               .code = "legacy.methodical_days.unknown_teacher",
+               .path = "/methodical_days/rows/" + std::to_string(row_index) + "/teacher",
+               .message = "Methodical-day mapping references a teacher absent from the timetable: " +
+                          teacher_name,
+               .suggested_action = "Correct the teacher name or add the teacher to the timetable."});
+          continue;
+        }
+        domain::Teacher& teacher = *std::ranges::find_if(
+            project.teachers,
+            [&](const domain::Teacher& item) { return item.id == teacher_id->second; });
+        for (const std::string& day_name : split_semicolon_list(row[1])) {
+          const auto day = std::ranges::find_if(
+              project.calendar.days,
+              [&](const domain::Day& item) { return item.display_name == day_name; });
+          if (day == project.calendar.days.end()) {
+            add_error(result.report, "legacy.methodical_days.unknown_day",
+                      "/methodical_days/rows/" + std::to_string(row_index) + "/days",
+                      "Methodical-day mapping references an unknown day: " + day_name,
+                      "Use a day name declared in days_of_the_week.");
+            continue;
+          }
+          const std::size_t day_index =
+              static_cast<std::size_t>(std::distance(project.calendar.days.begin(), day));
+          for (const domain::Slot& slot : project.calendar.slots) {
+            if (slot.day_index == day_index) {
+              teacher.unavailable_slots.push_back(slot.id);
+            }
+          }
+          ++result.report.consumed_fields;
+        }
       }
     }
   }

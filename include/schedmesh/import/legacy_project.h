@@ -18,4 +18,8 @@ struct LegacyProjectImportResult {
 [[nodiscard]] LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings,
                                                                 const CsvTable& timetable);
 
+[[nodiscard]] LegacyProjectImportResult import_legacy_resources(
+    domain::Project project, const CsvTable& classrooms,
+    const std::optional<CsvTable>& methodical_days = std::nullopt);
+
 }  // namespace schedmesh::import
