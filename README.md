@@ -41,6 +41,18 @@ cmake --build --preset next-release -j 4
 ctest --preset next-release
 ```
 
+Formatting is checked without modifying sources:
+
+```powershell
+python tools/check_format.py
+```
+
+Static analysis can be enabled when `clang-tidy` is installed:
+
+```powershell
+cmake --preset next -DSCHEDMESH_ENABLE_CLANG_TIDY=ON
+```
+
 ## Run
 
 ```powershell

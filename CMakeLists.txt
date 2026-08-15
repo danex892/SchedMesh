@@ -6,6 +6,7 @@ find_package(Threads)
 option(SCHEDMESH_BUILD_LEGACY "Build the preserved legacy generator" ON)
 option(SCHEDMESH_BUILD_TESTS "Build the next-generation test suite" ON)
 option(SCHEDMESH_FETCH_DEPENDENCIES "Download pinned dependencies when unavailable" ON)
+option(SCHEDMESH_ENABLE_CLANG_TIDY "Run clang-tidy on next-generation targets" OFF)
 
 set(LEGACY_SOURCES
     src/schedmesh.cpp
@@ -29,6 +30,13 @@ function(schedmesh_copy_runtime_dependencies target)
                 $<TARGET_FILE_DIR:${target}>
             COMMAND_EXPAND_LISTS
         )
+    endif()
+endfunction()
+
+function(schedmesh_enable_clang_tidy target)
+    if(SCHEDMESH_ENABLE_CLANG_TIDY)
+        find_program(CLANG_TIDY_EXE NAMES clang-tidy REQUIRED)
+        set_target_properties(${target} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXE}")
     endif()
 endfunction()
 
@@ -77,6 +85,7 @@ target_compile_definitions(schedmesh-next PRIVATE SCHEDMESH_VERSION="${PROJECT_V
 target_link_libraries(schedmesh-next PRIVATE ortools::ortools)
 schedmesh_enable_warnings(schedmesh-next)
 schedmesh_copy_runtime_dependencies(schedmesh-next)
+schedmesh_enable_clang_tidy(schedmesh-next)
 
 if(SCHEDMESH_BUILD_TESTS)
     set(BUILD_TESTING ON CACHE BOOL "Build SchedMesh tests" FORCE)
@@ -100,6 +109,7 @@ if(SCHEDMESH_BUILD_TESTS)
     target_link_libraries(schedmesh-next-tests PRIVATE GTest::gtest_main ortools::ortools)
     schedmesh_enable_warnings(schedmesh-next-tests)
     schedmesh_copy_runtime_dependencies(schedmesh-next-tests)
+    schedmesh_enable_clang_tidy(schedmesh-next-tests)
 
     include(GoogleTest)
     gtest_discover_tests(schedmesh-next-tests)

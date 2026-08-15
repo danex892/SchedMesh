@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install formatting tools
+        run: sudo apt-get update && sudo apt-get install --yes clang-format
+      - name: Check public tree
+        run: python3 tools/check_public_tree.py
+      - name: Check formatting
+        run: python3 tools/check_format.py
+
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install --yes ninja-build
+      - name: Configure
+        run: >-
+          cmake -S . -B build/ci -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DSCHEDMESH_BUILD_LEGACY=ON
+          -DSCHEDMESH_BUILD_TESTS=ON
+          -DSCHEDMESH_FETCH_DEPENDENCIES=ON
+      - name: Build
+        run: cmake --build build/ci --target schedmesh-next schedmesh-next-tests SchedMesh -j 2
+      - name: Test
+        run: ctest --test-dir build/ci --output-on-failure

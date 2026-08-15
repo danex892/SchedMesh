@@ -39,3 +39,7 @@ CMakeUserPresets.json
 
 # Local generated timetable exports
 timetable_rooms*.csv
+
+# Private runtime projects and solve output
+/private/
+/outputs/

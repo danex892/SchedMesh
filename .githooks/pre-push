@@ -1,0 +1,20 @@
+#!/bin/sh
+set -eu
+
+case "$(git branch --show-current)" in
+  local/*|private/*)
+    echo "Push rejected: the current branch is marked private." >&2
+    exit 1
+    ;;
+esac
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  case "$local_ref" in
+    refs/heads/local/*|refs/heads/private/*)
+      echo "Push rejected: $local_ref is marked private." >&2
+      exit 1
+      ;;
+  esac
+done
+
+python tools/check_public_tree.py
