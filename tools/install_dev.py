@@ -174,16 +174,22 @@ def configure(ninja: Path, llvm: Path, ortools: Path) -> None:
             shutil.rmtree(dependency_build)
     environment = msvc_environment()
     system_includes = environment["INCLUDE"].replace(os.pathsep, ";")
+    library_flags = " ".join(
+        f'/LIBPATH:"{path}"' for path in environment["LIB"].split(os.pathsep) if path
+    )
     subprocess.run(
         [
             shutil.which("cmake") or "cmake", "-S", ".", "-B", str(build), "-G", "Ninja",
             f"-DCMAKE_MAKE_PROGRAM={ninja}",
             f"-DCMAKE_C_COMPILER={llvm / 'bin/clang-cl.exe'}",
             f"-DCMAKE_CXX_COMPILER={llvm / 'bin/clang-cl.exe'}",
+            "-DCMAKE_BUILD_TYPE=Release",
             "-DCMAKE_C_FLAGS=/X",
             "-DCMAKE_CXX_FLAGS=/X",
             f"-DCMAKE_C_STANDARD_INCLUDE_DIRECTORIES={system_includes}",
             f"-DCMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES={system_includes}",
+            f"-DCMAKE_EXE_LINKER_FLAGS={library_flags}",
+            f"-DCMAKE_SHARED_LINKER_FLAGS={library_flags}",
             f"-DCMAKE_PREFIX_PATH={ortools}",
             "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON", "-DSCHEDMESH_BUILD_LEGACY=OFF",
             "-DSCHEDMESH_BUILD_TESTS=ON", "-DSCHEDMESH_FETCH_DEPENDENCIES=ON",
