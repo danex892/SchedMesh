@@ -95,7 +95,11 @@ if(NOT TARGET nlohmann_json::nlohmann_json)
     message(FATAL_ERROR "nlohmann/json 3.12 is required.")
 endif()
 
-add_executable(schedmesh-next src/app/main.cpp src/solver/smoke_solver.cpp)
+add_executable(schedmesh-next
+    src/app/main.cpp
+    src/app/validate_command.cpp
+    src/solver/smoke_solver.cpp
+)
 target_include_directories(schedmesh-next PRIVATE include)
 target_compile_features(schedmesh-next PRIVATE cxx_std_20)
 target_compile_definitions(schedmesh-next PRIVATE SCHEDMESH_VERSION="${PROJECT_VERSION}")
@@ -114,6 +118,7 @@ target_compile_features(schedmesh-domain PUBLIC cxx_std_20)
 target_link_libraries(schedmesh-domain PRIVATE nlohmann_json::nlohmann_json)
 schedmesh_enable_warnings(schedmesh-domain)
 schedmesh_enable_clang_tidy(schedmesh-domain)
+target_link_libraries(schedmesh-next PRIVATE schedmesh-domain)
 
 if(SCHEDMESH_BUILD_TESTS)
     set(BUILD_TESTING ON CACHE BOOL "Build SchedMesh tests" FORCE)
@@ -145,9 +150,11 @@ if(SCHEDMESH_BUILD_TESTS)
 
     add_executable(schedmesh-domain-tests
         tests/test_main.cpp
+        tests/app/validate_command_test.cpp
         tests/domain/domain_test.cpp
         tests/io/project_json_test.cpp
         tests/validation/project_validator_test.cpp
+        src/app/validate_command.cpp
     )
     target_include_directories(schedmesh-domain-tests PRIVATE tests)
     target_compile_features(schedmesh-domain-tests PRIVATE cxx_std_20)
@@ -158,5 +165,7 @@ if(SCHEDMESH_BUILD_TESTS)
 
     include(GoogleTest)
     gtest_discover_tests(schedmesh-next-tests)
-    gtest_discover_tests(schedmesh-domain-tests)
+    gtest_discover_tests(schedmesh-domain-tests
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    )
 endif()

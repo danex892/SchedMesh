@@ -2,6 +2,7 @@
 #include <string_view>
 
 #include "ortools/base/version.h"
+#include "schedmesh/app/validate_command.h"
 #include "schedmesh/solver/smoke_solver.h"
 
 namespace {
@@ -11,7 +12,9 @@ void print_version() {
             << "OR-Tools " << operations_research::OrToolsVersionString() << '\n';
 }
 
-void print_usage() { std::cout << "Usage: schedmesh-next [--version|solve-smoke]\n"; }
+void print_usage() {
+  std::cout << "Usage: schedmesh-next [--version|solve-smoke|validate <project.json>]\n";
+}
 
 }  // namespace
 
@@ -29,6 +32,10 @@ int main(int argc, char* argv[]) {
     }
     std::cout << "CP-SAT smoke model solved; selected slot: " << result.selected_slot << '\n';
     return 0;
+  }
+
+  if (argc == 3 && std::string_view{argv[1]} == "validate") {
+    return schedmesh::app::validate_project_file(argv[2], std::cout, std::cerr);
   }
 
   print_usage();

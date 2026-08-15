@@ -1,0 +1,97 @@
+{
+  "calendar": {
+    "days": [
+      {
+        "display_name": "Day 1",
+        "id": "mon",
+        "ordinal": 0
+      }
+    ],
+    "periods": [
+      {
+        "end_time_minutes": null,
+        "id": "p1",
+        "ordinal": 0,
+        "start_time_minutes": null
+      }
+    ],
+    "slots": [
+      {
+        "day_index": 0,
+        "id": "slot-mon-p1",
+        "period_index": 0
+      }
+    ]
+  },
+  "meetings": [
+    {
+      "allowed_start_slots": [
+        "slot-mon-p1"
+      ],
+      "distribution_key": "math-group-01",
+      "duration_in_periods": 1,
+      "groups": [
+        "group-01"
+      ],
+      "id": "meeting-001",
+      "room_requirements": [
+        {
+          "candidates": [],
+          "fixed_room": "room-001",
+          "lane": 0,
+          "required_features": []
+        }
+      ],
+      "subject": "subject-math",
+      "teacher_requirements": [
+        {
+          "candidates": [],
+          "fixed_teacher": "teacher-001",
+          "lane": 0
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "display_name": "Tiny fixture",
+    "id": "project-tiny"
+  },
+  "rooms": [
+    {
+      "capacity": 30,
+      "display_name": "Room 1",
+      "features": [],
+      "id": "room-001",
+      "unavailable_slots": []
+    }
+  ],
+  "schema_version": 1,
+  "student_groups": [
+    {
+      "allowed_slots": [
+        "slot-mon-p1"
+      ],
+      "display_name": "Group 1",
+      "grade": 5,
+      "id": "group-01"
+    }
+  ],
+  "subjects": [
+    {
+      "display_name": "Subject 1",
+      "id": "subject-math"
+    }
+  ],
+  "teachers": [
+    {
+      "display_name": "Teacher 1",
+      "id": "teacher-001",
+      "maximum_daily_load": null,
+      "maximum_weekly_load": 20,
+      "qualified_subjects": [
+        "subject-math"
+      ],
+      "unavailable_slots": []
+    }
+  ]
+}

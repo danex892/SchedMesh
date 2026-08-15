@@ -2,6 +2,9 @@
 
 #include <gtest/gtest.h>
 
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
 
 #include "fixtures/tiny_project.h"
@@ -20,6 +23,23 @@ TEST(ProjectJsonTest, RoundTripsTinyProjectByteStably) {
   ASSERT_TRUE(parsed.project.has_value());
   EXPECT_EQ(write_project_json(*parsed.project), first);
   EXPECT_EQ(first.back(), '\n');
+}
+
+TEST(ProjectJsonTest, PublicFixtureMatchesCanonicalWriterByteForByte) {
+  const auto fixture = std::filesystem::path{"tests"} / "fixtures" / "tiny_project.json";
+  std::ifstream input(fixture, std::ios::binary);
+  ASSERT_TRUE(input);
+  const std::string fixture_contents{std::istreambuf_iterator<char>{input},
+                                     std::istreambuf_iterator<char>{}};
+
+  const ProjectReadResult parsed = read_project_json(fixture_contents);
+
+  ASSERT_TRUE(parsed.ok()) << (parsed.validation.diagnostics.empty()
+                                   ? "no diagnostic"
+                                   : parsed.validation.diagnostics.front().message);
+  ASSERT_TRUE(parsed.project.has_value());
+  EXPECT_EQ(write_project_json(*parsed.project), fixture_contents);
+  EXPECT_EQ(write_project_json(test::make_tiny_project()), fixture_contents);
 }
 
 TEST(ProjectJsonTest, ReportsMalformedJsonWithoutPartialProject) {

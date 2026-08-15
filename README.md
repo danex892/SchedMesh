@@ -6,6 +6,8 @@ SchedMesh is being rewritten as a bounded and testable C++20 application powered
 OR-Tools CP-SAT. The original C++17 generator remains available as the `SchedMesh`
 target while the new `schedmesh-next` target is developed in parallel. See the
 [roadmap](docs/ROADMAP.md) and [rewrite plan](docs/CPP_CP_SAT_REWRITE_PLAN.md).
+The canonical schema is documented in
+[project format v1](docs/formats/project-v1.md).
 
 ## What It Does
 
@@ -58,6 +60,7 @@ cmake --preset next -DSCHEDMESH_ENABLE_CLANG_TIDY=ON
 ```powershell
 .\build\next\Release\schedmesh-next.exe --version
 .\build\next\Release\schedmesh-next.exe solve-smoke
+.\build\next\Release\schedmesh-next.exe validate tests\fixtures\tiny_project.json
 ```
 
 The legacy generator remains available at:
