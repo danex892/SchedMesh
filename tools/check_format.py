@@ -12,6 +12,7 @@ import sys
 SOURCE_ROOTS = (
     Path("include/schedmesh"),
     Path("src/app"),
+    Path("src/domain"),
     Path("src/solver"),
     Path("tests"),
 )

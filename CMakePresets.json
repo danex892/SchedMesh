@@ -25,6 +25,7 @@
       "targets": [
         "schedmesh-next",
         "schedmesh-next-tests",
+        "schedmesh-domain-tests",
         "SchedMesh"
       ]
     }
