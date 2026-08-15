@@ -19,6 +19,7 @@ The public example is [`tests/fixtures/tiny_project.json`](../../tests/fixtures/
 | `student_groups` | array | Grade, allowed global slots, and repeated-subject policy. |
 | `rooms` | array | Capacity, features, and unavailability. |
 | `meetings` | array | Events to place, including simultaneous resource lanes. |
+| `preferences` | object | Solver-independent objective switches, including last-day load minimization. |
 
 IDs are stable strings such as `teacher-001`; an array index is never a persistent
 identifier. Times are integer minutes after midnight or `null` when unknown.

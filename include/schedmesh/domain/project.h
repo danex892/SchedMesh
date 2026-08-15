@@ -7,6 +7,7 @@
 #include "schedmesh/domain/calendar.h"
 #include "schedmesh/domain/entities.h"
 #include "schedmesh/domain/meeting.h"
+#include "schedmesh/domain/preferences.h"
 
 namespace schedmesh::domain {
 
@@ -26,6 +27,7 @@ struct Project {
   std::vector<StudentGroup> student_groups;
   std::vector<Room> rooms;
   std::vector<Meeting> meetings;
+  SchedulePreferences preferences;
 };
 
 }  // namespace schedmesh::domain

@@ -171,6 +171,7 @@ LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings
   }
 
   domain::Project project{.metadata = {.id = "legacy-import", .display_name = "Legacy import"}};
+  project.preferences.minimize_last_day_load = settings.last_day_short;
   std::vector<domain::Day> days;
   days.reserve(static_cast<std::size_t>(settings.days));
   for (int index = 0; index < settings.days; ++index) {

@@ -269,13 +269,15 @@ domain::Project read_project(const Json& root) {
     }
     project.meetings.push_back(std::move(meeting));
   }
+  project.preferences.minimize_last_day_load =
+      root.at("preferences").at("minimize_last_day_load").get<bool>();
   return project;
 }
 
 void report_unknown_top_level_fields(const Json& root, validation::ValidationResult& validation) {
-  static const std::set<std::string> known_fields = {"calendar", "meetings",       "metadata",
-                                                     "rooms",    "schema_version", "student_groups",
-                                                     "subjects", "teachers"};
+  static const std::set<std::string> known_fields = {"calendar",       "meetings", "metadata",
+                                                     "preferences",    "rooms",    "schema_version",
+                                                     "student_groups", "subjects", "teachers"};
   for (const auto& [key, value] : root.items()) {
     static_cast<void>(value);
     if (!known_fields.contains(key)) {
@@ -292,15 +294,17 @@ void report_unknown_top_level_fields(const Json& root, validation::ValidationRes
 }  // namespace
 
 std::string write_project_json(const domain::Project& project) {
-  const Json root{{"calendar", calendar_json(project.calendar)},
-                  {"meetings", meetings_json(project.meetings)},
-                  {"metadata", Json{{"display_name", project.metadata.display_name},
-                                    {"id", project.metadata.id}}},
-                  {"rooms", rooms_json(project.rooms)},
-                  {"schema_version", project.schema_version},
-                  {"student_groups", groups_json(project.student_groups)},
-                  {"subjects", subjects_json(project.subjects)},
-                  {"teachers", teachers_json(project.teachers)}};
+  const Json root{
+      {"calendar", calendar_json(project.calendar)},
+      {"meetings", meetings_json(project.meetings)},
+      {"metadata",
+       Json{{"display_name", project.metadata.display_name}, {"id", project.metadata.id}}},
+      {"preferences", Json{{"minimize_last_day_load", project.preferences.minimize_last_day_load}}},
+      {"rooms", rooms_json(project.rooms)},
+      {"schema_version", project.schema_version},
+      {"student_groups", groups_json(project.student_groups)},
+      {"subjects", subjects_json(project.subjects)},
+      {"teachers", teachers_json(project.teachers)}};
   return root.dump(2) + "\n";
 }
 

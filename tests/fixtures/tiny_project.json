@@ -56,6 +56,9 @@
     "display_name": "Tiny fixture",
     "id": "project-tiny"
   },
+  "preferences": {
+    "minimize_last_day_load": false
+  },
   "rooms": [
     {
       "capacity": 30,
