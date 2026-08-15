@@ -122,6 +122,7 @@ add_library(schedmesh-domain
     src/import/legacy_text.cpp
     src/io/project_json.cpp
     src/validation/project_validator.cpp
+    src/validation/schedule_validator.cpp
 )
 target_include_directories(schedmesh-domain PUBLIC include)
 target_compile_features(schedmesh-domain PUBLIC cxx_std_20)
@@ -168,6 +169,7 @@ if(SCHEDMESH_BUILD_TESTS)
         tests/import/legacy_settings_test.cpp
         tests/import/legacy_project_test.cpp
         tests/validation/project_validator_test.cpp
+        tests/validation/schedule_validator_test.cpp
         src/app/migrate_command.cpp
         src/app/validate_command.cpp
     )
