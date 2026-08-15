@@ -60,6 +60,95 @@ TEST(LegacyProjectImportTest, DisambiguatesSubjectIdsAfterNormalization) {
   EXPECT_EQ(result.project->subjects[1].id.value(), "subject-italian-2");
 }
 
+TEST(LegacyProjectImportTest, RemovesForbiddenSessionBoundarySlots) {
+  LegacySettings legacy_settings = settings();
+  legacy_settings.not_first_or_last = {"Math"};
+  const CsvTable table = {{"", "Shifts", "2"},
+                          {"", "Group", "5a"},
+                          {"", "Double lessons", ""},
+                          {"Teacher", "Subject", ""},
+                          {"Teacher A", "Math", "1"}};
+
+  const LegacyProjectImportResult result = import_legacy_timetable(legacy_settings, table);
+
+  ASSERT_TRUE(result.ok());
+  ASSERT_EQ(result.project->subjects.size(), 1U);
+  EXPECT_TRUE(result.project->subjects.front().forbid_first_period);
+  EXPECT_TRUE(result.project->subjects.front().forbid_last_period);
+  ASSERT_EQ(result.project->meetings.size(), 1U);
+  EXPECT_EQ(result.project->meetings.front().allowed_start_slots.size(), 2U);
+}
+
+TEST(LegacyProjectImportTest, ExpandsDoubleLessonsIntoConsecutiveMeetings) {
+  LegacySettings legacy_settings = settings();
+  legacy_settings.double_lessons = {"Math"};
+  const CsvTable table = {{"", "Shifts", "1"},
+                          {"", "Group", "5a"},
+                          {"", "Double lessons", ""},
+                          {"Teacher", "Subject", ""},
+                          {"Teacher A", "Math", "4"}};
+
+  const LegacyProjectImportResult result = import_legacy_timetable(legacy_settings, table);
+
+  ASSERT_TRUE(result.ok());
+  EXPECT_EQ(result.project->subjects.front().required_consecutive_periods, 2);
+  ASSERT_EQ(result.project->meetings.size(), 2U);
+  EXPECT_EQ(result.project->meetings.front().duration_in_periods, 2);
+  EXPECT_EQ(result.project->meetings.front().allowed_start_slots.size(), 4U);
+  EXPECT_EQ(result.project->teachers.front().maximum_weekly_load, 4);
+}
+
+TEST(LegacyProjectImportTest, RejectsIncompleteDoubleLessonBlock) {
+  LegacySettings legacy_settings = settings();
+  legacy_settings.double_lessons = {"Math"};
+  const CsvTable table = {{"", "Shifts", "1"},
+                          {"", "Group", "5a"},
+                          {"", "Double lessons", ""},
+                          {"Teacher", "Subject", ""},
+                          {"Teacher A", "Math", "3"}};
+
+  const LegacyProjectImportResult result = import_legacy_timetable(legacy_settings, table);
+
+  EXPECT_FALSE(result.ok());
+  EXPECT_FALSE(result.project.has_value());
+  EXPECT_EQ(result.report.diagnostics.back().code, "legacy.timetable.incomplete_consecutive_block");
+}
+
+TEST(LegacyProjectImportTest, ImportsSubjectConflictsAndRepeatedSubjectGroupPolicy) {
+  LegacySettings legacy_settings = settings();
+  legacy_settings.conflicts = {{"Math", "Science"}};
+  const CsvTable table = {{"", "Shifts", "1"},         {"", "Group", "5a"},
+                          {"", "Double lessons", "1"}, {"Teacher", "Subject", ""},
+                          {"Teacher A", "Math", "1"},  {"", "Science", "1"}};
+
+  const LegacyProjectImportResult result = import_legacy_timetable(legacy_settings, table);
+
+  ASSERT_TRUE(result.ok());
+  EXPECT_TRUE(result.project->student_groups.front().allow_repeated_subjects_per_day);
+  ASSERT_EQ(result.project->subjects.size(), 2U);
+  EXPECT_EQ(result.project->subjects[0].conflicting_subjects,
+            std::vector{result.project->subjects[1].id});
+  EXPECT_EQ(result.project->subjects[1].conflicting_subjects,
+            std::vector{result.project->subjects[0].id});
+}
+
+TEST(LegacyProjectImportTest, DiagnosesLegacySettingThatNeverAffectedScheduling) {
+  LegacySettings legacy_settings = settings();
+  legacy_settings.entire_course_per_day = {"Math"};
+  const CsvTable table = {{"", "Shifts", "1"},
+                          {"", "Group", "5a"},
+                          {"", "Double lessons", ""},
+                          {"Teacher", "Subject", ""},
+                          {"Teacher A", "Math", "1"}};
+
+  const LegacyProjectImportResult result = import_legacy_timetable(legacy_settings, table);
+
+  ASSERT_TRUE(result.ok());
+  EXPECT_EQ(result.report.ignored_fields, 1U);
+  EXPECT_EQ(result.report.diagnostics.back().code,
+            "legacy.entire_course_per_day.unimplemented_legacy_setting");
+}
+
 TEST(LegacyProjectImportTest, RejectsInvalidHoursWithoutReturningPartialProject) {
   const CsvTable table = {{"", "Shifts", "1"},
                           {"", "Group", "5a"},

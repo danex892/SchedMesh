@@ -106,7 +106,12 @@ domain::Calendar read_calendar(const Json& value) {
 Json subjects_json(const std::vector<domain::Subject>& subjects) {
   Json output = Json::array();
   for (const auto& subject : subjects) {
-    output.push_back(Json{{"display_name", subject.display_name}, {"id", id_json(subject.id)}});
+    output.push_back(Json{{"conflicting_subjects", ids_json(subject.conflicting_subjects)},
+                          {"display_name", subject.display_name},
+                          {"forbid_first_period", subject.forbid_first_period},
+                          {"forbid_last_period", subject.forbid_last_period},
+                          {"id", id_json(subject.id)},
+                          {"required_consecutive_periods", subject.required_consecutive_periods}});
   }
   return output;
 }
@@ -129,10 +134,12 @@ Json teachers_json(const std::vector<domain::Teacher>& teachers) {
 Json groups_json(const std::vector<domain::StudentGroup>& groups) {
   Json output = Json::array();
   for (const auto& group : groups) {
-    output.push_back(Json{{"allowed_slots", ids_json(group.allowed_slots)},
-                          {"display_name", group.display_name},
-                          {"grade", group.grade},
-                          {"id", id_json(group.id)}});
+    output.push_back(
+        Json{{"allowed_slots", ids_json(group.allowed_slots)},
+             {"allow_repeated_subjects_per_day", group.allow_repeated_subjects_per_day},
+             {"display_name", group.display_name},
+             {"grade", group.grade},
+             {"id", id_json(group.id)}});
   }
   return output;
 }
@@ -197,8 +204,13 @@ domain::Project read_project(const Json& root) {
   project.calendar = read_calendar(root.at("calendar"));
 
   for (const auto& item : root.at("subjects")) {
-    project.subjects.push_back({.id = read_id<domain::SubjectId>(item.at("id")),
-                                .display_name = item.at("display_name").get<std::string>()});
+    project.subjects.push_back(
+        {.id = read_id<domain::SubjectId>(item.at("id")),
+         .display_name = item.at("display_name").get<std::string>(),
+         .required_consecutive_periods = item.at("required_consecutive_periods").get<int>(),
+         .forbid_first_period = item.at("forbid_first_period").get<bool>(),
+         .forbid_last_period = item.at("forbid_last_period").get<bool>(),
+         .conflicting_subjects = read_ids<domain::SubjectId>(item.at("conflicting_subjects"))});
   }
   for (const auto& item : root.at("teachers")) {
     project.teachers.push_back(
@@ -216,7 +228,9 @@ domain::Project read_project(const Json& root) {
         {.id = read_id<domain::StudentGroupId>(item.at("id")),
          .display_name = item.at("display_name").get<std::string>(),
          .grade = item.at("grade").get<int>(),
-         .allowed_slots = read_ids<domain::SlotId>(item.at("allowed_slots"))});
+         .allowed_slots = read_ids<domain::SlotId>(item.at("allowed_slots")),
+         .allow_repeated_subjects_per_day =
+             item.at("allow_repeated_subjects_per_day").get<bool>()});
   }
   for (const auto& item : root.at("rooms")) {
     project.rooms.push_back(

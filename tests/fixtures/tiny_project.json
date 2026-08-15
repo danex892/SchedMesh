@@ -68,6 +68,7 @@
   "schema_version": 1,
   "student_groups": [
     {
+      "allow_repeated_subjects_per_day": false,
       "allowed_slots": [
         "slot-mon-p1"
       ],
@@ -78,8 +79,12 @@
   ],
   "subjects": [
     {
+      "conflicting_subjects": [],
       "display_name": "Subject 1",
-      "id": "subject-math"
+      "forbid_first_period": false,
+      "forbid_last_period": false,
+      "id": "subject-math",
+      "required_consecutive_periods": 1
     }
   ],
   "teachers": [

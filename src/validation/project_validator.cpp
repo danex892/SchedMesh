@@ -44,6 +44,25 @@ bool contains(const std::unordered_set<Id<Tag>>& ids, const Id<Tag>& id) {
   return ids.contains(id);
 }
 
+template <typename Value>
+bool contains(const std::vector<Value>& values, const Value& value) {
+  return std::ranges::find(values, value) != values.end();
+}
+
+template <typename Entity, typename EntityId>
+const Entity* find_entity(const std::vector<Entity>& entities, const EntityId& id) {
+  const auto found =
+      std::ranges::find_if(entities, [&](const Entity& entity) { return entity.id == id; });
+  return found == entities.end() ? nullptr : &*found;
+}
+
+bool has_required_features(const domain::Room& room,
+                           const std::set<std::string>& required_features) {
+  return std::ranges::all_of(required_features, [&](const std::string& feature) {
+    return room.features.contains(feature);
+  });
+}
+
 template <typename Tag>
 std::unordered_set<Id<Tag>> collect_ids(const auto& entities) {
   std::unordered_set<Id<Tag>> ids;
@@ -154,6 +173,36 @@ ValidationResult ProjectValidator::validate(const domain::Project& project) cons
     }
   }
 
+  for (std::size_t index = 0; index < project.subjects.size(); ++index) {
+    const domain::Subject& subject = project.subjects[index];
+    const std::string path = "/subjects/" + std::to_string(index);
+    validate_references(subject.conflicting_subjects, subject_ids, path + "/conflicting_subjects",
+                        subject.id.value(), "subject", result);
+    if (subject.required_consecutive_periods <= 0) {
+      add_error(result, "subject.invalid_consecutive_periods",
+                path + "/required_consecutive_periods",
+                "Required consecutive period count must be positive.", subject.id.value(),
+                "Use a value of at least one period.");
+    }
+    for (std::size_t conflict_index = 0; conflict_index < subject.conflicting_subjects.size();
+         ++conflict_index) {
+      const domain::SubjectId& conflicting_id = subject.conflicting_subjects[conflict_index];
+      const domain::Subject* conflicting = find_entity(project.subjects, conflicting_id);
+      const std::string conflict_path =
+          path + "/conflicting_subjects/" + std::to_string(conflict_index);
+      if (conflicting_id == subject.id) {
+        add_error(result, "subject.self_conflict", conflict_path,
+                  "Subject cannot conflict with itself.", subject.id.value(),
+                  "Remove the self-reference.");
+      } else if (conflicting != nullptr &&
+                 !contains(conflicting->conflicting_subjects, subject.id)) {
+        add_error(result, "subject.asymmetric_conflict", conflict_path,
+                  "Subject conflict must be declared symmetrically.", subject.id.value(),
+                  "Add the reverse conflict reference.");
+      }
+    }
+  }
+
   for (std::size_t index = 0; index < project.teachers.size(); ++index) {
     const auto& teacher = project.teachers[index];
     const std::string path = "/teachers/" + std::to_string(index);
@@ -194,6 +243,13 @@ ValidationResult ProjectValidator::validate(const domain::Project& project) cons
       add_error(result, "project.unknown_reference", path + "/subject",
                 "Referenced subject does not exist.", meeting.id.value(),
                 "Use a subject declared in this project.");
+    }
+    const domain::Subject* meeting_subject = find_entity(project.subjects, meeting.subject);
+    if (meeting_subject != nullptr &&
+        meeting.duration_in_periods != meeting_subject->required_consecutive_periods) {
+      add_error(result, "meeting.subject_duration_mismatch", path + "/duration_in_periods",
+                "Meeting duration does not match the subject's consecutive-period requirement.",
+                meeting.id.value(), "Use the duration declared by the meeting subject.");
     }
     validate_references(meeting.groups, group_ids, path + "/groups", meeting.id.value(),
                         "student group", result);
@@ -242,6 +298,23 @@ ValidationResult ProjectValidator::validate(const domain::Project& project) cons
       }
       validate_references(requirement.candidates, teacher_ids, requirement_path + "/candidates",
                           meeting.id.value(), "teacher", result);
+      const auto validate_qualification = [&](const domain::TeacherId& teacher_id,
+                                              const std::string& teacher_path) {
+        const domain::Teacher* teacher = find_entity(project.teachers, teacher_id);
+        if (teacher != nullptr && !contains(teacher->qualified_subjects, meeting.subject)) {
+          add_error(result, "meeting.teacher_not_qualified", teacher_path,
+                    "Teacher is not qualified for the meeting subject.", meeting.id.value(),
+                    "Add the subject to the teacher qualifications or choose another teacher.");
+        }
+      };
+      if (requirement.fixed_teacher) {
+        validate_qualification(*requirement.fixed_teacher, requirement_path + "/fixed_teacher");
+      }
+      for (std::size_t candidate_index = 0; candidate_index < requirement.candidates.size();
+           ++candidate_index) {
+        validate_qualification(requirement.candidates[candidate_index],
+                               requirement_path + "/candidates/" + std::to_string(candidate_index));
+      }
     }
 
     for (std::size_t requirement_index = 0; requirement_index < meeting.room_requirements.size();
@@ -266,6 +339,99 @@ ValidationResult ProjectValidator::validate(const domain::Project& project) cons
       }
       validate_references(requirement.candidates, room_ids, requirement_path + "/candidates",
                           meeting.id.value(), "room", result);
+    }
+
+    const bool has_feasible_slot =
+        std::ranges::any_of(meeting.allowed_start_slots, [&](const domain::SlotId& slot_id) {
+          if (!contains(slot_ids, slot_id)) {
+            return false;
+          }
+          const domain::Slot* slot = find_entity(project.calendar.slots, slot_id);
+          if (slot == nullptr || meeting.duration_in_periods <= 0) {
+            return false;
+          }
+          std::vector<domain::SlotId> occupied_slots;
+          occupied_slots.reserve(static_cast<std::size_t>(meeting.duration_in_periods));
+          for (int offset = 0; offset < meeting.duration_in_periods; ++offset) {
+            const std::size_t period_index = slot->period_index + static_cast<std::size_t>(offset);
+            const auto occupied =
+                std::ranges::find_if(project.calendar.slots, [&](const domain::Slot& item) {
+                  return item.day_index == slot->day_index && item.period_index == period_index;
+                });
+            if (occupied == project.calendar.slots.end()) {
+              return false;
+            }
+            occupied_slots.push_back(occupied->id);
+          }
+          const bool subject_boundary_allowed =
+              meeting_subject == nullptr ||
+              std::ranges::all_of(meeting.groups, [&](const domain::StudentGroupId& group_id) {
+                const domain::StudentGroup* group = find_entity(project.student_groups, group_id);
+                if (group == nullptr || slot == nullptr) {
+                  return false;
+                }
+                std::vector<std::size_t> day_periods;
+                for (const domain::SlotId& group_slot_id : group->allowed_slots) {
+                  const domain::Slot* group_slot =
+                      find_entity(project.calendar.slots, group_slot_id);
+                  if (group_slot != nullptr && group_slot->day_index == slot->day_index) {
+                    day_periods.push_back(group_slot->period_index);
+                  }
+                }
+                if (day_periods.empty()) {
+                  return false;
+                }
+                const auto [first, last] = std::ranges::minmax_element(day_periods);
+                return (!meeting_subject->forbid_first_period || slot->period_index != *first) &&
+                       (!meeting_subject->forbid_last_period || slot->period_index != *last);
+              });
+          const bool groups_available =
+              std::ranges::all_of(meeting.groups, [&](const domain::StudentGroupId& group_id) {
+                const domain::StudentGroup* group = find_entity(project.student_groups, group_id);
+                return group != nullptr &&
+                       std::ranges::all_of(occupied_slots, [&](const domain::SlotId& occupied) {
+                         return contains(group->allowed_slots, occupied);
+                       });
+              });
+          const bool teachers_available = std::ranges::all_of(
+              meeting.teacher_requirements, [&](const domain::TeacherRequirement& requirement) {
+                const auto teacher_available = [&](const domain::TeacherId& teacher_id) {
+                  const domain::Teacher* teacher = find_entity(project.teachers, teacher_id);
+                  return teacher != nullptr &&
+                         contains(teacher->qualified_subjects, meeting.subject) &&
+                         std::ranges::none_of(occupied_slots, [&](const domain::SlotId& occupied) {
+                           return contains(teacher->unavailable_slots, occupied);
+                         });
+                };
+                if (requirement.fixed_teacher) {
+                  return teacher_available(*requirement.fixed_teacher);
+                }
+                return std::ranges::any_of(requirement.candidates, teacher_available);
+              });
+          const bool rooms_available = std::ranges::all_of(
+              meeting.room_requirements, [&](const domain::RoomRequirement& requirement) {
+                const auto room_available = [&](const domain::RoomId& room_id) {
+                  const domain::Room* room = find_entity(project.rooms, room_id);
+                  return room != nullptr &&
+                         std::ranges::none_of(occupied_slots,
+                                              [&](const domain::SlotId& occupied) {
+                                                return contains(room->unavailable_slots, occupied);
+                                              }) &&
+                         has_required_features(*room, requirement.required_features);
+                };
+                if (requirement.fixed_room) {
+                  return room_available(*requirement.fixed_room);
+                }
+                return std::ranges::any_of(requirement.candidates, room_available);
+              });
+          return subject_boundary_allowed && groups_available && teachers_available &&
+                 rooms_available;
+        });
+    if (!meeting.allowed_start_slots.empty() && !has_feasible_slot) {
+      add_error(result, "meeting.no_feasible_start_slot", path + "/allowed_start_slots",
+                "No allowed start slot satisfies group, teacher, and room availability.",
+                meeting.id.value(),
+                "Expand the meeting domain or relax the conflicting resource availability.");
     }
   }
 

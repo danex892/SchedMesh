@@ -14,9 +14,9 @@ The public example is [`tests/fixtures/tiny_project.json`](../../tests/fixtures/
 | `schema_version` | unsigned integer | Must be `1`. |
 | `metadata` | object | Stable project `id` and presentation-only `display_name`. |
 | `calendar` | object | Day and period axes plus their global slots. |
-| `subjects` | array | Subject IDs and display names. |
+| `subjects` | array | Subject IDs, conflicts, consecutive-period requirements, and boundary restrictions. |
 | `teachers` | array | Qualifications, unavailability, and load limits. |
-| `student_groups` | array | Grade and allowed global slots. |
+| `student_groups` | array | Grade, allowed global slots, and repeated-subject policy. |
 | `rooms` | array | Capacity, features, and unavailability. |
 | `meetings` | array | Events to place, including simultaneous resource lanes. |
 

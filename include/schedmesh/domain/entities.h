@@ -12,6 +12,10 @@ namespace schedmesh::domain {
 struct Subject {
   SubjectId id;
   std::string display_name;
+  int required_consecutive_periods{1};
+  bool forbid_first_period{};
+  bool forbid_last_period{};
+  std::vector<SubjectId> conflicting_subjects;
 };
 
 struct Teacher {
@@ -28,6 +32,7 @@ struct StudentGroup {
   std::string display_name;
   int grade{};
   std::vector<SlotId> allowed_slots;
+  bool allow_repeated_subjects_per_day{};
 };
 
 struct Room {

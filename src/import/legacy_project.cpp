@@ -117,6 +117,29 @@ std::vector<domain::SlotId> allowed_slots(const domain::Project& project, const 
   return result;
 }
 
+std::vector<domain::SlotId> subject_allowed_slots(const domain::Project& project,
+                                                  const LegacySettings& settings, int session,
+                                                  const domain::Subject& subject) {
+  std::vector<domain::SlotId> result = allowed_slots(project, settings, session);
+  const std::size_t first_period =
+      settings.sessions == 1
+          ? 0U
+          : static_cast<std::size_t>((session - 1) *
+                                     (settings.maximum_lessons_per_session - 1));
+  const std::size_t last_period =
+      first_period + static_cast<std::size_t>(settings.maximum_lessons_per_session - 1);
+  std::erase_if(result, [&](const domain::SlotId& slot_id) {
+    const auto slot = std::ranges::find_if(
+        project.calendar.slots, [&](const domain::Slot& item) { return item.id == slot_id; });
+    return slot != project.calendar.slots.end() &&
+           ((slot->period_index + static_cast<std::size_t>(subject.required_consecutive_periods) >
+             last_period + 1) ||
+            (subject.forbid_first_period && slot->period_index == first_period) ||
+            (subject.forbid_last_period && slot->period_index == last_period));
+  });
+  return result;
+}
+
 }  // namespace
 
 bool LegacyProjectImportResult::ok() const noexcept {
@@ -140,10 +163,10 @@ LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings
               "Use the original legacy timetable matrix layout.");
     return result;
   }
-  if (timetable[0].size() != width) {
+  if (timetable[0].size() != width || timetable[2].size() != width) {
     add_error(result.report, "legacy.timetable.header_width_mismatch", "/timetable/rows/0",
-              "Shifts and Group header rows have different column counts.",
-              "Add or remove cells so both rows describe the same group columns.");
+              "Shifts, Group, and Double lessons header rows have different column counts.",
+              "Add or remove cells so all header rows describe the same group columns.");
     return result;
   }
 
@@ -180,10 +203,20 @@ LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings
     const int occurrence = ++group_occurrences[component];
     const domain::StudentGroupId group_id{
         "group-" + component + (occurrence == 1 ? "" : "-" + std::to_string(occurrence))};
+    const std::string repeated_subjects = trim(timetable[2][source_index]);
+    if (!repeated_subjects.empty() && repeated_subjects != "0" && repeated_subjects != "1") {
+      add_error(result.report, "legacy.timetable.invalid_repeated_subject_policy",
+                "/timetable/rows/2/columns/" + std::to_string(source_index),
+                "Double lessons group flag must be empty, 0, or 1.",
+                "Use 1 to allow repeated subjects on the same day, otherwise 0 or empty.");
+      continue;
+    }
     project.student_groups.push_back({.id = group_id,
                                       .display_name = group_name,
                                       .grade = grade_of(group_name),
-                                      .allowed_slots = allowed_slots(project, settings, *session)});
+                                      .allowed_slots = allowed_slots(project, settings, *session),
+                                      .allow_repeated_subjects_per_day =
+                                          repeated_subjects == "1"});
     columns.push_back({.source_index = source_index, .session = *session, .group_id = group_id});
     ++result.report.consumed_fields;
   }
@@ -238,9 +271,22 @@ LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings
           "subject-" + component +
           (occurrence == 1 ? "" : "-" + std::to_string(occurrence))};
       subject_iterator = subject_ids.emplace(subject_name, subject_id).first;
-      project.subjects.push_back({.id = subject_id, .display_name = subject_name});
+      const bool forbid_boundary =
+          std::ranges::find(settings.not_first_or_last, subject_name) !=
+          settings.not_first_or_last.end();
+      const int required_consecutive_periods =
+          std::ranges::find(settings.double_lessons, subject_name) != settings.double_lessons.end()
+              ? 2
+              : 1;
+      project.subjects.push_back({.id = subject_id,
+                                  .display_name = subject_name,
+                                  .required_consecutive_periods = required_consecutive_periods,
+                                  .forbid_first_period = forbid_boundary,
+                                  .forbid_last_period = forbid_boundary});
     }
     const domain::SubjectId subject_id = subject_iterator->second;
+    const domain::Subject& subject = *std::ranges::find_if(
+        project.subjects, [&](const domain::Subject& item) { return item.id == subject_id; });
     if (std::ranges::find(teacher.qualified_subjects, subject_id) == teacher.qualified_subjects.end()) {
       teacher.qualified_subjects.push_back(subject_id);
     }
@@ -264,18 +310,30 @@ LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings
           ++result.report.consumed_fields;
           continue;
         }
+        if (*hours % subject.required_consecutive_periods != 0) {
+          add_error(result.report, "legacy.timetable.incomplete_consecutive_block",
+                    "/timetable/rows/" + std::to_string(row_index) + "/columns/" +
+                        std::to_string(column.source_index),
+                    "Weekly hours cannot be divided into the subject's required consecutive blocks.",
+                    "Use a weekly hour count divisible by " +
+                        std::to_string(subject.required_consecutive_periods) + ".");
+          continue;
+        }
         const std::string batch_key = column.group_id.value() + "\n" + subject_id.value() + "\n" +
                                       std::to_string(profile) + "\n" + std::to_string(*hours);
         auto& batch = meeting_batches[batch_key];
         if (batch.empty()) {
-          for (int occurrence = 0; occurrence < *hours; ++occurrence) {
+          const int occurrence_count = *hours / subject.required_consecutive_periods;
+          for (int occurrence = 0; occurrence < occurrence_count; ++occurrence) {
             const std::size_t meeting_number = project.meetings.size() + 1;
             project.meetings.push_back(
                 {.id = domain::MeetingId{"meeting-" + std::to_string(meeting_number)},
                  .subject = subject_id,
                  .groups = {column.group_id},
                  .teacher_requirements = {{.fixed_teacher = teacher.id, .lane = 0}},
-                 .allowed_start_slots = allowed_slots(project, settings, column.session),
+                 .allowed_start_slots =
+                     subject_allowed_slots(project, settings, column.session, subject),
+                 .duration_in_periods = subject.required_consecutive_periods,
                  .distribution_key = column.group_id.value() + "-" + subject_id.value() +
                                      (profiles.size() == 1
                                           ? ""
@@ -293,6 +351,48 @@ LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings
         ++result.report.consumed_fields;
       }
     }
+  }
+
+  for (const auto& [first_name, second_name] : settings.conflicts) {
+    const auto first = subject_ids.find(first_name);
+    const auto second = subject_ids.find(second_name);
+    if (first == subject_ids.end() || second == subject_ids.end()) {
+      ++result.report.ignored_fields;
+      std::string conflict_name = first_name;
+      conflict_name.append(" / ");
+      conflict_name.append(second_name);
+      result.report.diagnostics.push_back(
+          {.severity = MigrationSeverity::kWarning,
+           .code = "legacy.conflicts.unknown_subject",
+           .path = "/config/conflicts",
+           .message = "Subject conflict references a subject absent from the timetable: " +
+                      conflict_name,
+           .suggested_action = "Correct the configured subject names or remove the stale rule."});
+      continue;
+    }
+    domain::Subject& first_subject = *std::ranges::find_if(
+        project.subjects, [&](const domain::Subject& item) { return item.id == first->second; });
+    domain::Subject& second_subject = *std::ranges::find_if(
+        project.subjects, [&](const domain::Subject& item) { return item.id == second->second; });
+    if (std::ranges::find(first_subject.conflicting_subjects, second_subject.id) ==
+        first_subject.conflicting_subjects.end()) {
+      first_subject.conflicting_subjects.push_back(second_subject.id);
+    }
+    if (std::ranges::find(second_subject.conflicting_subjects, first_subject.id) ==
+        second_subject.conflicting_subjects.end()) {
+      second_subject.conflicting_subjects.push_back(first_subject.id);
+    }
+    ++result.report.consumed_fields;
+  }
+  for (const std::string& subject_name : settings.entire_course_per_day) {
+    ++result.report.ignored_fields;
+    result.report.diagnostics.push_back(
+        {.severity = MigrationSeverity::kWarning,
+         .code = "legacy.entire_course_per_day.unimplemented_legacy_setting",
+         .path = "/config/entire_course_per_day",
+         .message = "Legacy loaded but never enforced entire_course_per_day for subject: " +
+                    subject_name,
+         .suggested_action = "Define the intended scheduling policy explicitly before enabling it."});
   }
 
   if (result.report.ok()) {
@@ -417,7 +517,7 @@ LegacyProjectImportResult import_legacy_resources(
                       "Use a day name declared in days_of_the_week.");
             continue;
           }
-          const std::size_t day_index =
+          const auto day_index =
               static_cast<std::size_t>(std::distance(project.calendar.days.begin(), day));
           for (const domain::Slot& slot : project.calendar.slots) {
             if (slot.day_index == day_index) {

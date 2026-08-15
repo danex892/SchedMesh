@@ -73,5 +73,97 @@ TEST(ProjectValidatorTest, RejectsAmbiguousResourceRequirement) {
   EXPECT_TRUE(has_code(result, "meeting.ambiguous_room_requirement"));
 }
 
+TEST(ProjectValidatorTest, RejectsTeacherWithoutSubjectQualification) {
+  auto project = test::make_tiny_project();
+  project.teachers.front().qualified_subjects.clear();
+
+  const ValidationResult result = ProjectValidator{}.validate(project);
+
+  EXPECT_FALSE(result.ok());
+  EXPECT_TRUE(has_code(result, "meeting.teacher_not_qualified"));
+  EXPECT_TRUE(has_code(result, "meeting.no_feasible_start_slot"));
+}
+
+TEST(ProjectValidatorTest, RejectsMeetingWithoutCommonAvailableSlot) {
+  auto project = test::make_tiny_project();
+  const domain::SlotId only_slot = project.calendar.slots.front().id;
+  project.teachers.front().unavailable_slots = {only_slot};
+
+  const ValidationResult result = ProjectValidator{}.validate(project);
+
+  EXPECT_FALSE(result.ok());
+  EXPECT_TRUE(has_code(result, "meeting.no_feasible_start_slot"));
+}
+
+TEST(ProjectValidatorTest, AcceptsOneRemainingCandidateRoom) {
+  auto project = test::make_tiny_project();
+  const domain::SlotId only_slot = project.calendar.slots.front().id;
+  project.rooms.push_back({.id = domain::RoomId{"room-002"},
+                           .display_name = "Room 2",
+                           .features = {"laboratory"},
+                           .unavailable_slots = {only_slot}});
+  auto& requirement = project.meetings.front().room_requirements.front();
+  requirement.fixed_room.reset();
+  requirement.candidates = {domain::RoomId{"room-001"}, domain::RoomId{"room-002"}};
+
+  const ValidationResult result = ProjectValidator{}.validate(project);
+
+  EXPECT_TRUE(result.ok());
+}
+
+TEST(ProjectValidatorTest, RejectsRoomsWithoutRequiredFeatures) {
+  auto project = test::make_tiny_project();
+  auto& requirement = project.meetings.front().room_requirements.front();
+  requirement.required_features = {"laboratory"};
+
+  const ValidationResult result = ProjectValidator{}.validate(project);
+
+  EXPECT_FALSE(result.ok());
+  EXPECT_TRUE(has_code(result, "meeting.no_feasible_start_slot"));
+}
+
+TEST(ProjectValidatorTest, AppliesSubjectBoundaryRestrictionsToMeetingDomain) {
+  auto project = test::make_tiny_project();
+  project.subjects.front().forbid_first_period = true;
+
+  const ValidationResult result = ProjectValidator{}.validate(project);
+
+  EXPECT_FALSE(result.ok());
+  EXPECT_TRUE(has_code(result, "meeting.no_feasible_start_slot"));
+}
+
+TEST(ProjectValidatorTest, RejectsConsecutiveMeetingWithoutEnoughAvailablePeriods) {
+  auto project = test::make_tiny_project();
+  project.subjects.front().required_consecutive_periods = 2;
+  project.meetings.front().duration_in_periods = 2;
+
+  const ValidationResult result = ProjectValidator{}.validate(project);
+
+  EXPECT_FALSE(result.ok());
+  EXPECT_TRUE(has_code(result, "meeting.no_feasible_start_slot"));
+}
+
+TEST(ProjectValidatorTest, RejectsMeetingDurationDifferentFromSubjectPolicy) {
+  auto project = test::make_tiny_project();
+  project.subjects.front().required_consecutive_periods = 2;
+
+  const ValidationResult result = ProjectValidator{}.validate(project);
+
+  EXPECT_FALSE(result.ok());
+  EXPECT_TRUE(has_code(result, "meeting.subject_duration_mismatch"));
+}
+
+TEST(ProjectValidatorTest, RejectsAsymmetricSubjectConflict) {
+  auto project = test::make_tiny_project();
+  project.subjects.push_back(
+      {.id = domain::SubjectId{"subject-science"}, .display_name = "Subject 2"});
+  project.subjects.front().conflicting_subjects = {domain::SubjectId{"subject-science"}};
+
+  const ValidationResult result = ProjectValidator{}.validate(project);
+
+  EXPECT_FALSE(result.ok());
+  EXPECT_TRUE(has_code(result, "subject.asymmetric_conflict"));
+}
+
 }  // namespace
 }  // namespace schedmesh::validation
