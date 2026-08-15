@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
 import shutil
 import subprocess
 import sys
@@ -14,13 +15,14 @@ SOURCE_ROOTS = (
     Path("src/app"),
     Path("src/domain"),
     Path("src/solver"),
+    Path("src/validation"),
     Path("tests"),
 )
 SOURCE_SUFFIXES = {".cc", ".cpp", ".h", ".hpp"}
 
 
 def main() -> int:
-    clang_format = shutil.which("clang-format")
+    clang_format = os.environ.get("CLANG_FORMAT") or shutil.which("clang-format")
     if clang_format is None:
         print("clang-format is required for the formatting check.", file=sys.stderr)
         return 2

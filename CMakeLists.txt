@@ -87,7 +87,7 @@ schedmesh_enable_warnings(schedmesh-next)
 schedmesh_copy_runtime_dependencies(schedmesh-next)
 schedmesh_enable_clang_tidy(schedmesh-next)
 
-add_library(schedmesh-domain src/domain/calendar.cpp)
+add_library(schedmesh-domain src/domain/calendar.cpp src/validation/project_validator.cpp)
 target_include_directories(schedmesh-domain PUBLIC include)
 target_compile_features(schedmesh-domain PUBLIC cxx_std_20)
 schedmesh_enable_warnings(schedmesh-domain)
@@ -117,7 +117,11 @@ if(SCHEDMESH_BUILD_TESTS)
     schedmesh_copy_runtime_dependencies(schedmesh-next-tests)
     schedmesh_enable_clang_tidy(schedmesh-next-tests)
 
-    add_executable(schedmesh-domain-tests tests/domain/domain_test.cpp)
+    add_executable(schedmesh-domain-tests
+        tests/domain/domain_test.cpp
+        tests/validation/project_validator_test.cpp
+    )
+    target_include_directories(schedmesh-domain-tests PRIVATE tests)
     target_compile_features(schedmesh-domain-tests PRIVATE cxx_std_20)
     target_link_libraries(schedmesh-domain-tests PRIVATE GTest::gtest_main schedmesh-domain)
     schedmesh_enable_warnings(schedmesh-domain-tests)
