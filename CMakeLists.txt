@@ -78,6 +78,23 @@ if(NOT TARGET ortools::ortools)
     message(FATAL_ERROR "OR-Tools 9.15 is required. Install it or enable SCHEDMESH_FETCH_DEPENDENCIES.")
 endif()
 
+find_package(nlohmann_json 3.12 CONFIG QUIET)
+if(NOT nlohmann_json_FOUND AND SCHEDMESH_FETCH_DEPENDENCIES)
+    include(FetchContent)
+    set(JSON_BuildTests OFF CACHE BOOL "Build nlohmann/json tests" FORCE)
+    FetchContent_Declare(
+        nlohmann_json
+        URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz
+        URL_HASH SHA256=42f6e95cad6ec532fd372391373363b62a14af6d771056dbfc86160e6dfff7aa
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    FetchContent_MakeAvailable(nlohmann_json)
+endif()
+
+if(NOT TARGET nlohmann_json::nlohmann_json)
+    message(FATAL_ERROR "nlohmann/json 3.12 is required.")
+endif()
+
 add_executable(schedmesh-next src/app/main.cpp src/solver/smoke_solver.cpp)
 target_include_directories(schedmesh-next PRIVATE include)
 target_compile_features(schedmesh-next PRIVATE cxx_std_20)
@@ -87,9 +104,14 @@ schedmesh_enable_warnings(schedmesh-next)
 schedmesh_copy_runtime_dependencies(schedmesh-next)
 schedmesh_enable_clang_tidy(schedmesh-next)
 
-add_library(schedmesh-domain src/domain/calendar.cpp src/validation/project_validator.cpp)
+add_library(schedmesh-domain
+    src/domain/calendar.cpp
+    src/io/project_json.cpp
+    src/validation/project_validator.cpp
+)
 target_include_directories(schedmesh-domain PUBLIC include)
 target_compile_features(schedmesh-domain PUBLIC cxx_std_20)
+target_link_libraries(schedmesh-domain PRIVATE nlohmann_json::nlohmann_json)
 schedmesh_enable_warnings(schedmesh-domain)
 schedmesh_enable_clang_tidy(schedmesh-domain)
 
@@ -109,21 +131,27 @@ if(SCHEDMESH_BUILD_TESTS)
         FetchContent_MakeAvailable(googletest)
     endif()
 
-    add_executable(schedmesh-next-tests tests/solver/smoke_solver_test.cpp src/solver/smoke_solver.cpp)
+    add_executable(schedmesh-next-tests
+        tests/test_main.cpp
+        tests/solver/smoke_solver_test.cpp
+        src/solver/smoke_solver.cpp
+    )
     target_include_directories(schedmesh-next-tests PRIVATE include)
     target_compile_features(schedmesh-next-tests PRIVATE cxx_std_20)
-    target_link_libraries(schedmesh-next-tests PRIVATE GTest::gtest_main ortools::ortools)
+    target_link_libraries(schedmesh-next-tests PRIVATE GTest::gtest ortools::ortools)
     schedmesh_enable_warnings(schedmesh-next-tests)
     schedmesh_copy_runtime_dependencies(schedmesh-next-tests)
     schedmesh_enable_clang_tidy(schedmesh-next-tests)
 
     add_executable(schedmesh-domain-tests
+        tests/test_main.cpp
         tests/domain/domain_test.cpp
+        tests/io/project_json_test.cpp
         tests/validation/project_validator_test.cpp
     )
     target_include_directories(schedmesh-domain-tests PRIVATE tests)
     target_compile_features(schedmesh-domain-tests PRIVATE cxx_std_20)
-    target_link_libraries(schedmesh-domain-tests PRIVATE GTest::gtest_main schedmesh-domain)
+    target_link_libraries(schedmesh-domain-tests PRIVATE GTest::gtest schedmesh-domain)
     schedmesh_enable_warnings(schedmesh-domain-tests)
     schedmesh_copy_runtime_dependencies(schedmesh-domain-tests)
     schedmesh_enable_clang_tidy(schedmesh-domain-tests)

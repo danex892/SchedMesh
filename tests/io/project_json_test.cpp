@@ -1,0 +1,66 @@
+#include "schedmesh/io/project_json.h"
+
+#include <gtest/gtest.h>
+
+#include <string>
+
+#include "fixtures/tiny_project.h"
+
+namespace schedmesh::io {
+namespace {
+
+TEST(ProjectJsonTest, RoundTripsTinyProjectByteStably) {
+  const std::string first = write_project_json(test::make_tiny_project());
+
+  const ProjectReadResult parsed = read_project_json(first);
+
+  ASSERT_TRUE(parsed.ok()) << (parsed.validation.diagnostics.empty()
+                                   ? "no diagnostic"
+                                   : parsed.validation.diagnostics.front().message);
+  ASSERT_TRUE(parsed.project.has_value());
+  EXPECT_EQ(write_project_json(*parsed.project), first);
+  EXPECT_EQ(first.back(), '\n');
+}
+
+TEST(ProjectJsonTest, ReportsMalformedJsonWithoutPartialProject) {
+  const ProjectReadResult parsed = read_project_json(R"({"schema_version": 1,})");
+
+  EXPECT_FALSE(parsed.ok());
+  EXPECT_FALSE(parsed.project.has_value());
+  ASSERT_EQ(parsed.validation.diagnostics.size(), 1U);
+  EXPECT_EQ(parsed.validation.diagnostics.front().code, "json.invalid_document");
+}
+
+TEST(ProjectJsonTest, RejectsUnknownTopLevelField) {
+  std::string json = write_project_json(test::make_tiny_project());
+  const std::size_t insertion = json.find('{') + 1;
+  json.insert(insertion, R"("future_field": true,)");
+
+  const ProjectReadResult parsed = read_project_json(json);
+
+  EXPECT_FALSE(parsed.ok());
+  EXPECT_TRUE(parsed.project.has_value())
+      << (parsed.validation.diagnostics.empty() ? "no diagnostic"
+                                                : parsed.validation.diagnostics.front().message);
+  ASSERT_FALSE(parsed.validation.diagnostics.empty());
+  EXPECT_EQ(parsed.validation.diagnostics.front().code, "json.unknown_field");
+  EXPECT_EQ(parsed.validation.diagnostics.front().path, "/future_field");
+}
+
+TEST(ProjectJsonTest, ReportsStructurallyInvalidReferencesAfterParsing) {
+  auto project = test::make_tiny_project();
+  project.meetings.front().subject = domain::SubjectId{"subject-missing"};
+
+  const ProjectReadResult parsed = read_project_json(write_project_json(project));
+
+  EXPECT_FALSE(parsed.ok());
+  EXPECT_TRUE(parsed.project.has_value())
+      << (parsed.validation.diagnostics.empty() ? "no diagnostic"
+                                                : parsed.validation.diagnostics.front().message);
+  ASSERT_FALSE(parsed.validation.diagnostics.empty());
+  EXPECT_EQ(parsed.validation.diagnostics.front().code, "project.unknown_reference");
+  EXPECT_EQ(parsed.validation.diagnostics.front().path, "/meetings/0/subject");
+}
+
+}  // namespace
+}  // namespace schedmesh::io

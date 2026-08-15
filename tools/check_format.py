@@ -14,6 +14,7 @@ SOURCE_ROOTS = (
     Path("include/schedmesh"),
     Path("src/app"),
     Path("src/domain"),
+    Path("src/io"),
     Path("src/solver"),
     Path("src/validation"),
     Path("tests"),
