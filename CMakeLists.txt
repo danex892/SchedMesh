@@ -18,7 +18,8 @@ set(LEGACY_SOURCES
 function(schedmesh_enable_warnings target)
     target_compile_options(${target} PRIVATE
         $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive->
-        $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>
+        $<$<AND:$<NOT:$<CXX_COMPILER_ID:MSVC>>,$<CXX_COMPILER_FRONTEND_VARIANT:MSVC>>:/W4 /EHsc>
+        $<$<AND:$<NOT:$<CXX_COMPILER_ID:MSVC>>,$<NOT:$<CXX_COMPILER_FRONTEND_VARIANT:MSVC>>>:-Wall -Wextra -Wpedantic>
     )
 endfunction()
 

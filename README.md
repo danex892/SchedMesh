@@ -43,16 +43,34 @@ cmake --build --preset next-release -j 4
 ctest --preset next-release
 ```
 
-Formatting is checked without modifying sources:
+Install the pinned local development tools and configure the compilation database
+(the downloads and build tree are kept in the ignored `.tools/` directory):
 
 ```powershell
-python tools/check_format.py
+make install-dev
 ```
 
-Static analysis can be enabled when `clang-tidy` is installed:
+Check formatting and run strict static analysis on every next-generation C++
+translation unit:
+
+```powershell
+make lint
+```
+
+Apply the repository formatting rules:
+
+```powershell
+make format
+```
+
+The commands prefer LLVM from `.tools/`, then `CLANG_FORMAT`/`CLANG_TIDY`, `PATH`,
+and the conventional Windows LLVM installation. `make install-dev` currently
+supports Windows; on other systems install LLVM and Ninja with the package manager.
+Dependency-backed targets are also checked during a clang-tidy-enabled build:
 
 ```powershell
 cmake --preset next -DSCHEDMESH_ENABLE_CLANG_TIDY=ON
+cmake --build --preset next-release
 ```
 
 ## Run

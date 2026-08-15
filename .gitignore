@@ -1,6 +1,10 @@
 # Prerequisites
 *.d
 
+# Python tool caches
+__pycache__/
+*.py[cod]
+
 # Compiled Object files
 *.slo
 *.lo
@@ -33,6 +37,7 @@
 
 # CMake and IDE build trees
 /build*/
+/.tools/
 /out/
 /.vs/
 CMakeUserPresets.json

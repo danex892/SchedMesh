@@ -5,7 +5,14 @@ Checks: >
   modernize-*,
   performance-*,
   portability-*,
-  readability-*
-WarningsAsErrors: ''
+  readability-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-exception-escape,
+  -bugprone-unchecked-optional-access,
+  -modernize-use-trailing-return-type,
+  -readability-convert-member-functions-to-static,
+  -readability-function-cognitive-complexity,
+  -readability-identifier-length
+WarningsAsErrors: '*'
 HeaderFilterRegex: '^(include|src|tests)/'
 FormatStyle: file
