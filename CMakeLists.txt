@@ -134,10 +134,11 @@ target_link_libraries(schedmesh-next PRIVATE schedmesh-domain)
 
 add_library(schedmesh-solver
     src/solver/candidate_preprocessor.cpp
+    src/solver/solve.cpp
 )
 target_include_directories(schedmesh-solver PUBLIC include)
 target_compile_features(schedmesh-solver PUBLIC cxx_std_20)
-target_link_libraries(schedmesh-solver PUBLIC schedmesh-domain)
+target_link_libraries(schedmesh-solver PUBLIC schedmesh-domain PRIVATE ortools::ortools)
 schedmesh_enable_warnings(schedmesh-solver)
 schedmesh_enable_clang_tidy(schedmesh-solver)
 
@@ -160,6 +161,7 @@ if(SCHEDMESH_BUILD_TESTS)
     add_executable(schedmesh-next-tests
         tests/test_main.cpp
         tests/solver/candidate_preprocessor_test.cpp
+        tests/solver/solve_test.cpp
         tests/solver/smoke_solver_test.cpp
         src/solver/smoke_solver.cpp
     )

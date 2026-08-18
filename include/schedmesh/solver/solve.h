@@ -48,4 +48,6 @@ struct SolveResult {
   SolveStatistics statistics;
 };
 
+[[nodiscard]] SolveResult solve(const SolveRequest& request);
+
 }  // namespace schedmesh::solver
