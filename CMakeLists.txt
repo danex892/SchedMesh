@@ -132,6 +132,15 @@ schedmesh_enable_warnings(schedmesh-domain)
 schedmesh_enable_clang_tidy(schedmesh-domain)
 target_link_libraries(schedmesh-next PRIVATE schedmesh-domain)
 
+add_library(schedmesh-solver
+    src/solver/candidate_preprocessor.cpp
+)
+target_include_directories(schedmesh-solver PUBLIC include)
+target_compile_features(schedmesh-solver PUBLIC cxx_std_20)
+target_link_libraries(schedmesh-solver PUBLIC schedmesh-domain)
+schedmesh_enable_warnings(schedmesh-solver)
+schedmesh_enable_clang_tidy(schedmesh-solver)
+
 if(SCHEDMESH_BUILD_TESTS)
     set(BUILD_TESTING ON CACHE BOOL "Build SchedMesh tests" FORCE)
     include(CTest)
@@ -150,12 +159,13 @@ if(SCHEDMESH_BUILD_TESTS)
 
     add_executable(schedmesh-next-tests
         tests/test_main.cpp
+        tests/solver/candidate_preprocessor_test.cpp
         tests/solver/smoke_solver_test.cpp
         src/solver/smoke_solver.cpp
     )
-    target_include_directories(schedmesh-next-tests PRIVATE include)
+    target_include_directories(schedmesh-next-tests PRIVATE include tests)
     target_compile_features(schedmesh-next-tests PRIVATE cxx_std_20)
-    target_link_libraries(schedmesh-next-tests PRIVATE GTest::gtest ortools::ortools)
+    target_link_libraries(schedmesh-next-tests PRIVATE GTest::gtest ortools::ortools schedmesh-solver)
     schedmesh_enable_warnings(schedmesh-next-tests)
     schedmesh_copy_runtime_dependencies(schedmesh-next-tests)
     schedmesh_enable_clang_tidy(schedmesh-next-tests)
