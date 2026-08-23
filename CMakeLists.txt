@@ -104,6 +104,7 @@ endif()
 add_executable(schedmesh-next
     src/app/main.cpp
     src/app/migrate_command.cpp
+    src/app/solve_command.cpp
     src/app/validate_command.cpp
     src/solver/smoke_solver.cpp
 )
@@ -121,6 +122,7 @@ add_library(schedmesh-domain
     src/import/legacy_settings.cpp
     src/import/legacy_text.cpp
     src/io/project_json.cpp
+    src/io/schedule_json.cpp
     src/validation/objective_evaluator.cpp
     src/validation/project_validator.cpp
     src/validation/schedule_validator.cpp
@@ -141,6 +143,7 @@ target_compile_features(schedmesh-solver PUBLIC cxx_std_20)
 target_link_libraries(schedmesh-solver PUBLIC schedmesh-domain PRIVATE ortools::ortools)
 schedmesh_enable_warnings(schedmesh-solver)
 schedmesh_enable_clang_tidy(schedmesh-solver)
+target_link_libraries(schedmesh-next PRIVATE schedmesh-solver)
 
 if(SCHEDMESH_BUILD_TESTS)
     set(BUILD_TESTING ON CACHE BOOL "Build SchedMesh tests" FORCE)
@@ -162,8 +165,10 @@ if(SCHEDMESH_BUILD_TESTS)
         tests/test_main.cpp
         tests/solver/candidate_preprocessor_test.cpp
         tests/solver/solve_test.cpp
+        tests/app/solve_command_test.cpp
         tests/solver/smoke_solver_test.cpp
         src/solver/smoke_solver.cpp
+        src/app/solve_command.cpp
     )
     target_include_directories(schedmesh-next-tests PRIVATE include tests)
     target_compile_features(schedmesh-next-tests PRIVATE cxx_std_20)
@@ -194,7 +199,9 @@ if(SCHEDMESH_BUILD_TESTS)
     schedmesh_enable_clang_tidy(schedmesh-domain-tests)
 
     include(GoogleTest)
-    gtest_discover_tests(schedmesh-next-tests)
+    gtest_discover_tests(schedmesh-next-tests
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    )
     gtest_discover_tests(schedmesh-domain-tests
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )
