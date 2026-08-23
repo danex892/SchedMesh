@@ -5,7 +5,9 @@
 #include <chrono>
 #include <stop_token>
 
+#include "fixtures/medium_project.h"
 #include "fixtures/tiny_project.h"
+#include "schedmesh/validation/room_audit.h"
 
 namespace schedmesh::solver {
 namespace {
@@ -153,6 +155,24 @@ TEST(SolveTest, RejectsConcurrentGymUseByDistantGrades) {
   const SolveResult result = solve({.project = project});
 
   EXPECT_EQ(result.status, SolveStatus::kInfeasible);
+}
+
+TEST(SolveTest, SolvesPublicMediumRoomFixture) {
+  const domain::Project project = test::make_medium_project();
+  const validation::RoomAuditReport audit = validation::audit_rooms(project);
+
+  EXPECT_EQ(audit.statistics.meetings_without_rooms, 0U);
+  EXPECT_GT(audit.statistics.alternative_room_lanes, 0U);
+  EXPECT_GT(audit.statistics.feature_room_lanes, 0U);
+  EXPECT_GT(audit.statistics.capacity_room_lanes, 0U);
+  EXPECT_FALSE(audit.has_proven_capacity_overload());
+
+  const SolveResult result = solve({.project = project});
+
+  EXPECT_EQ(result.status, SolveStatus::kOptimal);
+  ASSERT_TRUE(result.schedule.has_value());
+  EXPECT_EQ(result.schedule->meetings.size(), project.meetings.size());
+  EXPECT_TRUE(result.diagnostics.ok());
 }
 
 TEST(SolveTest, RejectsInvalidProjectBeforeCallingCpSat) {
