@@ -139,11 +139,36 @@ SolveStatus map_status(sat::CpSolverStatus status, bool cancelled) {
   }
 }
 
+validation::ValidationResult validate_parameters(const SolveParameters& parameters) {
+  validation::ValidationResult result;
+  if (parameters.time_limit <= std::chrono::milliseconds::zero()) {
+    result.diagnostics.push_back(
+        {.code = "solver.invalid_time_limit",
+         .severity = validation::DiagnosticSeverity::kError,
+         .path = "/parameters/time_limit",
+         .message = "Solver time limit must be positive.",
+         .suggested_action = "Use a deadline of at least one millisecond."});
+  }
+  if (parameters.worker_count <= 0) {
+    result.diagnostics.push_back({.code = "solver.invalid_worker_count",
+                                  .severity = validation::DiagnosticSeverity::kError,
+                                  .path = "/parameters/worker_count",
+                                  .message = "Solver worker count must be positive.",
+                                  .suggested_action = "Use at least one worker."});
+  }
+  return result;
+}
+
 }  // namespace
 
 SolveResult solve(const SolveRequest& request) {
   const auto started = std::chrono::steady_clock::now();
   SolveResult result;
+  result.diagnostics = validate_parameters(request.parameters);
+  if (!result.diagnostics.ok()) {
+    result.status = SolveStatus::kInvalidParameters;
+    return result;
+  }
   CandidatePreprocessingResult candidates = CandidatePreprocessor{}.preprocess(request.project);
   if (!candidates.ok()) {
     result.status = SolveStatus::kInvalidProject;
@@ -259,6 +284,8 @@ SolveResult solve(const SolveRequest& request) {
   parameters.set_random_seed(request.parameters.random_seed);
   sat::Model solver;
   solver.Add(sat::NewSatParameters(parameters));
+  std::stop_callback cancellation_callback(request.cancellation,
+                                           [&solver] { sat::StopSearch(&solver); });
   const sat::CpSolverResponse response = sat::SolveCpModel(model.Build(), &solver);
   result.status = map_status(response.status(), request.cancellation.stop_requested());
   result.statistics.elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(

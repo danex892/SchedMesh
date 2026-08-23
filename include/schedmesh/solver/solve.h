@@ -12,6 +12,7 @@
 namespace schedmesh::solver {
 
 enum class SolveStatus {
+  kInvalidParameters,
   kInvalidProject,
   kFeasible,
   kOptimal,

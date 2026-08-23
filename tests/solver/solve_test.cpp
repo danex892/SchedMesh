@@ -2,6 +2,9 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
+#include <stop_token>
+
 #include "fixtures/tiny_project.h"
 
 namespace schedmesh::solver {
@@ -113,6 +116,40 @@ TEST(SolveTest, RejectsInvalidProjectBeforeCallingCpSat) {
   EXPECT_EQ(result.status, SolveStatus::kInvalidProject);
   EXPECT_FALSE(result.schedule.has_value());
   EXPECT_FALSE(result.diagnostics.ok());
+}
+
+TEST(SolveTest, RejectsInvalidExecutionParameters) {
+  const domain::Project project = test::make_tiny_project();
+
+  const SolveResult result =
+      solve({.project = project,
+             .parameters = {.time_limit = std::chrono::milliseconds::zero(), .worker_count = 0}});
+
+  EXPECT_EQ(result.status, SolveStatus::kInvalidParameters);
+  EXPECT_FALSE(result.schedule.has_value());
+  EXPECT_FALSE(result.diagnostics.ok());
+}
+
+TEST(SolveTest, HonorsCancellationRequestedBeforeSearch) {
+  const domain::Project project = test::make_tiny_project();
+  std::stop_source cancellation;
+  cancellation.request_stop();
+
+  const SolveResult result = solve({.project = project, .cancellation = cancellation.get_token()});
+
+  EXPECT_EQ(result.status, SolveStatus::kCancelled);
+  EXPECT_FALSE(result.schedule.has_value());
+}
+
+TEST(SolveTest, AppliesShortTimeLimitWithinShutdownMargin) {
+  const domain::Project project = test::make_tiny_project();
+  constexpr auto kTimeLimit = std::chrono::milliseconds{1};
+  constexpr auto kShutdownMargin = std::chrono::seconds{1};
+
+  const SolveResult result = solve({.project = project, .parameters = {.time_limit = kTimeLimit}});
+
+  EXPECT_TRUE(result.status == SolveStatus::kOptimal || result.status == SolveStatus::kTimeLimit);
+  EXPECT_LE(result.statistics.elapsed, kTimeLimit + kShutdownMargin);
 }
 
 TEST(SolveTest, SpreadsTeacherLoadAcrossDays) {
