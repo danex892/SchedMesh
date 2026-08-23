@@ -111,6 +111,19 @@ TEST(ProjectValidatorTest, AcceptsOneRemainingCandidateRoom) {
   EXPECT_TRUE(result.ok());
 }
 
+TEST(ProjectValidatorTest, RejectsMissingSubgroupRoomLane) {
+  auto project = test::make_tiny_project();
+  project.teachers.push_back(project.teachers.front());
+  project.teachers.back().id = domain::TeacherId{"teacher-002"};
+  project.meetings.front().teacher_requirements.push_back(
+      {.fixed_teacher = domain::TeacherId{"teacher-002"}, .lane = 1});
+
+  const ValidationResult result = ProjectValidator{}.validate(project);
+
+  EXPECT_FALSE(result.ok());
+  EXPECT_TRUE(has_code(result, "meeting.room_lane_mismatch"));
+}
+
 TEST(ProjectValidatorTest, RejectsRoomsWithoutRequiredFeatures) {
   auto project = test::make_tiny_project();
   auto& requirement = project.meetings.front().room_requirements.front();

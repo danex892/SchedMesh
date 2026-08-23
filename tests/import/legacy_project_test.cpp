@@ -47,6 +47,31 @@ TEST(LegacyProjectImportTest, ConvertsRepeatedSubjectRowsIntoSimultaneousTeacher
   EXPECT_EQ(result.project->meetings[0].teacher_requirements[1].lane, 1);
 }
 
+TEST(LegacyProjectImportTest, AssignsOneRoomLaneToEachSimultaneousSubgroup) {
+  const CsvTable table = {{"", "Shifts", "1"},
+                          {"", "Group", "5a"},
+                          {"", "Double lessons", ""},
+                          {"Teacher", "Subject", ""},
+                          {"Teacher A", "Language", "1"},
+                          {"Teacher B", "Language", "1"}};
+  LegacyProjectImportResult timetable_result = import_legacy_timetable(settings(), table);
+  ASSERT_TRUE(timetable_result.ok());
+
+  const LegacyProjectImportResult result = import_legacy_resources(
+      std::move(*timetable_result.project),
+      {{"Teacher", "Rooms"}, {"Teacher A", "101;102"}, {"Teacher B", "101;102"}});
+
+  ASSERT_TRUE(result.ok());
+  ASSERT_EQ(result.project->meetings.size(), 1U);
+  const domain::Meeting& meeting = result.project->meetings.front();
+  ASSERT_EQ(meeting.teacher_requirements.size(), 2U);
+  ASSERT_EQ(meeting.room_requirements.size(), 2U);
+  EXPECT_EQ(meeting.room_requirements[0].lane, 0);
+  EXPECT_EQ(meeting.room_requirements[1].lane, 1);
+  EXPECT_EQ(meeting.room_requirements[0].candidates.size(), 2U);
+  EXPECT_EQ(meeting.room_requirements[1].candidates.size(), 2U);
+}
+
 TEST(LegacyProjectImportTest, DisambiguatesSubjectIdsAfterNormalization) {
   const CsvTable table = {{"", "Shifts", "1"},           {"", "Group", "5a"},
                           {"", "Double lessons", ""},    {"Teacher", "Subject", ""},

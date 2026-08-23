@@ -105,6 +105,15 @@ void validate_lanes(const std::vector<Requirement>& requirements, const std::str
   }
 }
 
+template <typename Requirement>
+std::set<int> lane_ids(const std::vector<Requirement>& requirements) {
+  std::set<int> lanes;
+  for (const Requirement& requirement : requirements) {
+    lanes.insert(requirement.lane);
+  }
+  return lanes;
+}
+
 }  // namespace
 
 bool ValidationResult::ok() const noexcept {
@@ -275,6 +284,12 @@ ValidationResult ProjectValidator::validate(const domain::Project& project) cons
                    result);
     validate_lanes(meeting.room_requirements, path + "/room_requirements", meeting.id.value(),
                    result);
+    if (!meeting.room_requirements.empty() &&
+        lane_ids(meeting.teacher_requirements) != lane_ids(meeting.room_requirements)) {
+      add_error(result, "meeting.room_lane_mismatch", path + "/room_requirements",
+                "Room lanes must match teacher lanes when a meeting uses rooms.",
+                meeting.id.value(), "Add exactly one room requirement for every teacher lane.");
+    }
 
     for (std::size_t requirement_index = 0; requirement_index < meeting.teacher_requirements.size();
          ++requirement_index) {
