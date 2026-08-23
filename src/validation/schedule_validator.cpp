@@ -204,6 +204,11 @@ ValidationResult ScheduleValidator::validate(const domain::Project& project,
                   "Assigned room lacks a required feature.", room_id.value(),
                   "Choose a room with every required feature.");
       }
+      if (requirement.minimum_capacity > 0 && room->capacity < requirement.minimum_capacity) {
+        add_error(result, "schedule.room_capacity", path + "/rooms/" + std::to_string(lane),
+                  "Assigned room is too small for the meeting lane.", room_id.value(),
+                  "Choose a room that meets the minimum capacity.");
+      }
       for (const domain::Slot* slot : occupied) {
         if (contains(room->unavailable_slots, slot->id)) {
           add_error(result, "schedule.room_unavailable", path + "/start_slot",

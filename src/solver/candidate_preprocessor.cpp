@@ -112,6 +112,7 @@ std::vector<domain::RoomId> eligible_rooms(const domain::Project& project,
   std::erase_if(candidates, [&](const domain::RoomId& room_id) {
     const domain::Room* room = find_entity(project.rooms, room_id);
     return room == nullptr || !has_required_features(*room, requirement.required_features) ||
+           (requirement.minimum_capacity > 0 && room->capacity < requirement.minimum_capacity) ||
            std::ranges::any_of(slots, [&](const domain::SlotId& slot) {
              return contains(room->unavailable_slots, slot);
            });

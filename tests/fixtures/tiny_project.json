@@ -39,6 +39,7 @@
           "candidates": [],
           "fixed_room": "room-001",
           "lane": 0,
+          "minimum_capacity": 0,
           "required_features": []
         }
       ],

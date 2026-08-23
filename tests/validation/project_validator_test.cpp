@@ -122,6 +122,27 @@ TEST(ProjectValidatorTest, RejectsRoomsWithoutRequiredFeatures) {
   EXPECT_TRUE(has_code(result, "meeting.no_feasible_start_slot"));
 }
 
+TEST(ProjectValidatorTest, RejectsNegativeRoomCapacityRequirement) {
+  auto project = test::make_tiny_project();
+  project.meetings.front().room_requirements.front().minimum_capacity = -1;
+
+  const ValidationResult result = ProjectValidator{}.validate(project);
+
+  EXPECT_FALSE(result.ok());
+  EXPECT_TRUE(has_code(result, "meeting.negative_room_capacity"));
+}
+
+TEST(ProjectValidatorTest, RejectsMeetingWithoutLargeEnoughRoom) {
+  constexpr int kRequiredCapacity = 31;
+  auto project = test::make_tiny_project();
+  project.meetings.front().room_requirements.front().minimum_capacity = kRequiredCapacity;
+
+  const ValidationResult result = ProjectValidator{}.validate(project);
+
+  EXPECT_FALSE(result.ok());
+  EXPECT_TRUE(has_code(result, "meeting.no_feasible_start_slot"));
+}
+
 TEST(ProjectValidatorTest, AppliesSubjectBoundaryRestrictionsToMeetingDomain) {
   auto project = test::make_tiny_project();
   project.subjects.front().forbid_first_period = true;

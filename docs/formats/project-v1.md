@@ -32,7 +32,9 @@ as multiple numbered lanes inside the same meeting. Lane numbers are zero-based,
 non-negative, and unique within each requirement type.
 
 A resource requirement contains either one fixed resource or a non-empty candidate
-list, never both. Room requirements may additionally list required feature strings.
+list, never both. Room requirements may additionally list required feature strings
+and a non-negative `minimum_capacity`; zero means that the source did not specify a
+capacity requirement.
 
 ## Compatibility policy
 

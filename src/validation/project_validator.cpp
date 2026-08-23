@@ -332,6 +332,11 @@ ValidationResult ProjectValidator::validate(const domain::Project& project) cons
                   "Room requirement must define a fixed room or candidates.", meeting.id.value(),
                   "Assign a fixed room or candidate list.");
       }
+      if (requirement.minimum_capacity < 0) {
+        add_error(result, "meeting.negative_room_capacity", requirement_path + "/minimum_capacity",
+                  "Minimum room capacity cannot be negative.", meeting.id.value(),
+                  "Use zero for unspecified capacity or a positive minimum.");
+      }
       if (requirement.fixed_room && !contains(room_ids, *requirement.fixed_room)) {
         add_error(result, "project.unknown_reference", requirement_path + "/fixed_room",
                   "Referenced room does not exist.", meeting.id.value(),
@@ -413,6 +418,8 @@ ValidationResult ProjectValidator::validate(const domain::Project& project) cons
                 const auto room_available = [&](const domain::RoomId& room_id) {
                   const domain::Room* room = find_entity(project.rooms, room_id);
                   return room != nullptr &&
+                         (requirement.minimum_capacity <= 0 ||
+                          room->capacity >= requirement.minimum_capacity) &&
                          std::ranges::none_of(occupied_slots,
                                               [&](const domain::SlotId& occupied) {
                                                 return contains(room->unavailable_slots, occupied);

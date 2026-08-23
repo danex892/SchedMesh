@@ -19,6 +19,7 @@ struct RoomRequirement {
   std::optional<RoomId> fixed_room;
   std::vector<RoomId> candidates;
   std::set<std::string> required_features;
+  int minimum_capacity{};
   int lane{};
 };
 

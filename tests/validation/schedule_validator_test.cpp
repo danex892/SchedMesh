@@ -84,6 +84,23 @@ TEST(ScheduleValidatorTest, RejectsWrongResourceAssignments) {
   EXPECT_TRUE(has_code(result, "schedule.ineligible_room"));
 }
 
+TEST(ScheduleValidatorTest, RejectsRoomBelowLaneCapacity) {
+  constexpr int kRequiredCapacity = 31;
+  constexpr int kLargeRoomCapacity = 40;
+  domain::Project project = test::make_tiny_project();
+  project.rooms.push_back(
+      {.id = domain::RoomId{"room-002"}, .display_name = "Room 2", .capacity = kLargeRoomCapacity});
+  auto& requirement = project.meetings.front().room_requirements.front();
+  requirement.fixed_room.reset();
+  requirement.candidates = {domain::RoomId{"room-001"}, domain::RoomId{"room-002"}};
+  requirement.minimum_capacity = kRequiredCapacity;
+
+  const ValidationResult result = ScheduleValidator{}.validate(project, tiny_schedule());
+
+  EXPECT_FALSE(result.ok());
+  EXPECT_TRUE(has_code(result, "schedule.room_capacity"));
+}
+
 TEST(ScheduleValidatorTest, RejectsTeacherDailyLoadExcess) {
   domain::Project project = two_period_project();
   project.teachers.front().maximum_daily_load = 1;

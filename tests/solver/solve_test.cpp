@@ -107,6 +107,24 @@ TEST(SolveTest, ChoosesNonConflictingCandidateRooms) {
   EXPECT_NE(result.schedule->meetings[0].rooms, result.schedule->meetings[1].rooms);
 }
 
+TEST(SolveTest, ChoosesRoomMeetingTheLaneCapacity) {
+  constexpr int kLargeRoomCapacity = 40;
+  constexpr int kRequiredCapacity = 35;
+  domain::Project project = test::make_tiny_project();
+  project.rooms.push_back(
+      {.id = domain::RoomId{"room-002"}, .display_name = "Room 2", .capacity = kLargeRoomCapacity});
+  auto& requirement = project.meetings.front().room_requirements.front();
+  requirement.fixed_room.reset();
+  requirement.candidates = {domain::RoomId{"room-001"}, domain::RoomId{"room-002"}};
+  requirement.minimum_capacity = kRequiredCapacity;
+
+  const SolveResult result = solve({.project = project});
+
+  ASSERT_TRUE(result.schedule.has_value());
+  ASSERT_EQ(result.schedule->meetings.front().rooms.size(), 1U);
+  EXPECT_EQ(result.schedule->meetings.front().rooms.front(), domain::RoomId{"room-002"});
+}
+
 TEST(SolveTest, RejectsInvalidProjectBeforeCallingCpSat) {
   domain::Project project = test::make_tiny_project();
   project.meetings.front().allowed_start_slots.clear();

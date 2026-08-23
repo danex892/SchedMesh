@@ -175,6 +175,7 @@ Json room_requirements_json(const std::vector<domain::RoomRequirement>& requirem
         {"candidates", ids_json(requirement.candidates)},
         {"fixed_room", requirement.fixed_room ? id_json(*requirement.fixed_room) : Json(nullptr)},
         {"lane", requirement.lane},
+        {"minimum_capacity", requirement.minimum_capacity},
         {"required_features", requirement.required_features}});
   }
   return output;
@@ -265,6 +266,7 @@ domain::Project read_project(const Json& root) {
                                    requirement.at("fixed_room"))},
            .candidates = read_ids<domain::RoomId>(requirement.at("candidates")),
            .required_features = requirement.at("required_features").get<std::set<std::string>>(),
+           .minimum_capacity = requirement.value("minimum_capacity", 0),
            .lane = requirement.at("lane").get<int>()});
     }
     project.meetings.push_back(std::move(meeting));
