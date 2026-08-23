@@ -106,7 +106,6 @@ add_executable(schedmesh-next
     src/app/migrate_command.cpp
     src/app/solve_command.cpp
     src/app/validate_command.cpp
-    src/solver/smoke_solver.cpp
 )
 target_include_directories(schedmesh-next PRIVATE include)
 target_compile_features(schedmesh-next PRIVATE cxx_std_20)

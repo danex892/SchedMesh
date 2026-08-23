@@ -8,7 +8,6 @@
 #include "schedmesh/app/migrate_command.h"
 #include "schedmesh/app/solve_command.h"
 #include "schedmesh/app/validate_command.h"
-#include "schedmesh/solver/smoke_solver.h"
 
 namespace {
 
@@ -18,7 +17,7 @@ void print_version() {
 }
 
 void print_usage() {
-  std::cout << "Usage: schedmesh-next [--version|solve-smoke|validate <project.json>|"
+  std::cout << "Usage: schedmesh-next [--version|validate <project.json>|"
                "migrate-legacy <settings.conf> <project.json>|solve <project.json> <schedule.json> "
                "[--time-limit-ms N] [--workers N] [--seed N]]\n";
 }
@@ -33,16 +32,6 @@ bool parse_int(std::string_view input, int& value) {
 int main(int argc, char* argv[]) {
   if (argc == 2 && std::string_view{argv[1]} == "--version") {
     print_version();
-    return 0;
-  }
-
-  if (argc == 2 && std::string_view{argv[1]} == "solve-smoke") {
-    const auto result = schedmesh::solver::solve_smoke();
-    if (!result.feasible) {
-      std::cerr << "CP-SAT smoke model did not produce a feasible solution.\n";
-      return 1;
-    }
-    std::cout << "CP-SAT smoke model solved; selected slot: " << result.selected_slot << '\n';
     return 0;
   }
 
