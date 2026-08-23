@@ -132,9 +132,32 @@ SchedMesh may be tagged `v1.0.0` when all of the following are true:
 and every returned schedule passes independent validation. The preserved historical baseline is
 proven infeasible under reconstructed M3 semantics and remains an explicit M4 investigation.
 
-### M4 — Deliver the Desktop Workflow
+### M4 — Rooms and Full Historical Hard Rules
 
-- Build Qt 6 model/view editors and schedule views.
+- Reconstruct ambiguous historical room identities without inventing facilities.
+- Complete alternative and subgroup room assignment.
+- Enforce room features and capacity when canonical group sizes are available.
+- Implement the remaining historical hard rules from the M0 inventory.
+- Replace special gym handling with ordinary rooms and explicit features.
+- Add a public Medium fixture.
+
+**Exit evidence:** the Medium fixture is feasible within its target budget, every hard rule has
+solver and validator coverage, and solver/validator disagreement is zero.
+
+### M5–M9 — Reach CLI Acceptance
+
+- Add bounded infeasibility diagnostics and `schedmesh explain` in M5.
+- Add staged soft optimization with independently reconciled objective totals in M6.
+- Add candidate staffing and explicit open-staffing resources in M7.
+- Pass private historical acceptance and performance budgets in M8.
+- Cut over to the canonical CLI, documentation, and release evidence in M9.
+
+**Exit evidence:** the historical project produces a validator-approved schedule with documented
+statistics and objective components through the supported CLI workflow.
+
+### M10 — Deliver the Optional Desktop Workflow
+
+- Build Qt 6 model/view editors and schedule views on top of the accepted core.
 - Run solving outside the GUI thread or in a worker process.
 - Show status, elapsed time, cancellation, and result statistics.
 - Support a validated drag-and-drop move with conflict feedback.
@@ -142,22 +165,13 @@ proven infeasible under reconstructed M3 semantics and remains an explicit M4 in
 
 **Exit evidence:** the killer workflow completes without developer tools.
 
-### M5 — Package and Release V1.0
-
-- Run the complete historical acceptance test.
-- Package the reference desktop build.
-- Publish validation and objective reports.
-- Add screenshots, diagrams, background, and limitations.
-- Tag `v1.0.0` only after the closure contract passes.
-
-### M6 — Post-1.0 Expansion
+### Post-1.0 Expansion
 
 After V1.0:
 
 - improve general-purpose data editors;
 - add solver benchmark datasets and objective presets;
 - add richer export formats;
-- investigate infeasibility explanations;
 - expose the same core and validator through FastAPI;
 - build a guided web workflow if it adds portfolio value.
 
