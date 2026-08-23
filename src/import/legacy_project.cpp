@@ -414,6 +414,27 @@ LegacyProjectImportResult import_legacy_resources(
     teachers.emplace(teacher.display_name, teacher.id);
   }
   std::map<std::string, domain::RoomId, std::less<>> rooms;
+  std::set<std::string, std::less<>> room_ids;
+  for (const domain::Room& room : project.rooms) {
+    rooms.emplace(room.display_name, room.id);
+    room_ids.insert(room.id.value());
+  }
+  const auto ensure_room = [&](const std::string& display_name, const std::string& preferred_id,
+                               const std::set<std::string>& features = {}) {
+    if (const auto found = rooms.find(display_name); found != rooms.end()) {
+      return found->second;
+    }
+    std::string unique_id = preferred_id;
+    for (int occurrence = 2; room_ids.contains(unique_id); ++occurrence) {
+      unique_id = preferred_id + "-" + std::to_string(occurrence);
+    }
+    domain::RoomId room_id{unique_id};
+    rooms.emplace(display_name, room_id);
+    room_ids.insert(unique_id);
+    project.rooms.push_back(
+        {.id = room_id, .display_name = display_name, .features = features});
+    return room_id;
+  };
 
   if (classrooms.empty() || classrooms.front().size() < 2 ||
       trim(classrooms.front()[0]) != "Teacher" || trim(classrooms.front()[1]) != "Rooms") {
@@ -456,13 +477,13 @@ LegacyProjectImportResult import_legacy_resources(
       }
 
       std::vector<domain::RoomId> candidates;
+      std::set<domain::RoomId> seen_candidates;
       for (const std::string& room_name : room_names) {
-        const auto [iterator, inserted] =
-            rooms.try_emplace(room_name, domain::RoomId{"room-" + stable_component(room_name)});
-        if (inserted) {
-          project.rooms.push_back({.id = iterator->second, .display_name = room_name});
+        const domain::RoomId room_id =
+            ensure_room(room_name, "room-" + stable_component(room_name));
+        if (seen_candidates.insert(room_id).second) {
+          candidates.push_back(room_id);
         }
-        candidates.push_back(iterator->second);
       }
       for (domain::Meeting& meeting : project.meetings) {
         for (const domain::TeacherRequirement& requirement : meeting.teacher_requirements) {

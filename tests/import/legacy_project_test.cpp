@@ -185,6 +185,45 @@ TEST(LegacyProjectImportTest, AddsRoomCandidatesAndMethodicalDayAvailability) {
   EXPECT_EQ(result.project->teachers.front().unavailable_slots.size(), 5U);
 }
 
+TEST(LegacyProjectImportTest, SharesRoomIdentityAndDeduplicatesAlternatives) {
+  const CsvTable timetable = {{"", "Shifts", "1"},        {"", "Group", "5a"},
+                              {"", "Double lessons", ""}, {"Teacher", "Subject", ""},
+                              {"Teacher A", "Math", "1"}, {"Teacher B", "Science", "1"}};
+  LegacyProjectImportResult timetable_result = import_legacy_timetable(settings(), timetable);
+  ASSERT_TRUE(timetable_result.ok());
+
+  const LegacyProjectImportResult result = import_legacy_resources(
+      std::move(*timetable_result.project),
+      {{"Teacher", "Rooms"}, {"Teacher A", "101;102;101"}, {"Teacher B", "102;103"}});
+
+  ASSERT_TRUE(result.ok());
+  EXPECT_EQ(result.project->rooms.size(), 3U);
+  ASSERT_EQ(result.project->meetings.size(), 2U);
+  const auto& first = result.project->meetings[0].room_requirements.front().candidates;
+  const auto& second = result.project->meetings[1].room_requirements.front().candidates;
+  ASSERT_EQ(first.size(), 2U);
+  ASSERT_EQ(second.size(), 2U);
+  EXPECT_EQ(first[1], second[0]);
+}
+
+TEST(LegacyProjectImportTest, DisambiguatesNormalizedRoomIdCollisions) {
+  const CsvTable timetable = {{"", "Shifts", "1"},
+                              {"", "Group", "5a"},
+                              {"", "Double lessons", ""},
+                              {"Teacher", "Subject", ""},
+                              {"Teacher A", "Math", "1"}};
+  LegacyProjectImportResult timetable_result = import_legacy_timetable(settings(), timetable);
+  ASSERT_TRUE(timetable_result.ok());
+
+  const LegacyProjectImportResult result = import_legacy_resources(
+      std::move(*timetable_result.project), {{"Teacher", "Rooms"}, {"Teacher A", "Room A;Room-A"}});
+
+  ASSERT_TRUE(result.ok());
+  ASSERT_EQ(result.project->rooms.size(), 2U);
+  EXPECT_EQ(result.project->rooms[0].id, domain::RoomId{"room-room-a"});
+  EXPECT_EQ(result.project->rooms[1].id, domain::RoomId{"room-room-a-2"});
+}
+
 TEST(LegacyProjectImportTest, DiagnosesSpecialRoomCodesWithoutInventingFacilities) {
   const CsvTable timetable = {{"", "Shifts", "1"},
                               {"", "Group", "5a"},
