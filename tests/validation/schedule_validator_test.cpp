@@ -101,6 +101,43 @@ TEST(ScheduleValidatorTest, RejectsRoomBelowLaneCapacity) {
   EXPECT_TRUE(has_code(result, "schedule.room_capacity"));
 }
 
+TEST(ScheduleValidatorTest, RejectsConcurrentGymUseByDistantGrades) {
+  constexpr int kFirstGrade = 5;
+  constexpr int kDistantGrade = 8;
+  domain::Project project = test::make_tiny_project();
+  project.student_groups.front().grade = kFirstGrade;
+  project.rooms.front().features = {"gym"};
+  project.rooms.push_back(
+      {.id = domain::RoomId{"room-002"}, .display_name = "Gym lane 2", .features = {"gym"}});
+  auto& first_requirement = project.meetings.front().room_requirements.front();
+  first_requirement.fixed_room.reset();
+  first_requirement.candidates = {domain::RoomId{"room-001"}, domain::RoomId{"room-002"}};
+  first_requirement.required_features = {"gym"};
+
+  project.student_groups.push_back(project.student_groups.front());
+  project.student_groups.back().id = domain::StudentGroupId{"group-02"};
+  project.student_groups.back().grade = kDistantGrade;
+  project.teachers.push_back(project.teachers.front());
+  project.teachers.back().id = domain::TeacherId{"teacher-002"};
+  domain::Meeting second = project.meetings.front();
+  second.id = domain::MeetingId{"meeting-002"};
+  second.groups = {domain::StudentGroupId{"group-02"}};
+  second.teacher_requirements = {{.fixed_teacher = domain::TeacherId{"teacher-002"}, .lane = 0}};
+  second.distribution_key = "math-group-02";
+  project.meetings.push_back(second);
+
+  domain::Schedule schedule = tiny_schedule();
+  schedule.meetings.push_back({.meeting = second.id,
+                               .start_slot = domain::SlotId{"slot-mon-p1"},
+                               .teachers = {domain::TeacherId{"teacher-002"}},
+                               .rooms = {domain::RoomId{"room-002"}}});
+
+  const ValidationResult result = ScheduleValidator{}.validate(project, schedule);
+
+  EXPECT_FALSE(result.ok());
+  EXPECT_TRUE(has_code(result, "schedule.gym_grade_conflict"));
+}
+
 TEST(ScheduleValidatorTest, RejectsTeacherDailyLoadExcess) {
   domain::Project project = two_period_project();
   project.teachers.front().maximum_daily_load = 1;

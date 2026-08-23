@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -58,6 +59,30 @@ const Entity* find_entity(const std::vector<Entity>& entities, const EntityId& i
   const auto found =
       std::ranges::find_if(entities, [&](const Entity& entity) { return entity.id == id; });
   return found == entities.end() ? nullptr : &*found;
+}
+
+bool requires_room_feature(const domain::Meeting& meeting, std::string_view feature) {
+  return std::ranges::any_of(meeting.room_requirements, [&](const auto& requirement) {
+    return requirement.required_features.contains(std::string(feature));
+  });
+}
+
+bool gym_grades_compatible(const domain::Project& project, const domain::Meeting& first,
+                           const domain::Meeting& second) {
+  return std::ranges::all_of(first.groups, [&](const domain::StudentGroupId& first_id) {
+    const domain::StudentGroup* first_group = find_entity(project.student_groups, first_id);
+    return std::ranges::all_of(second.groups, [&](const domain::StudentGroupId& second_id) {
+      const domain::StudentGroup* second_group = find_entity(project.student_groups, second_id);
+      return first_group == nullptr || second_group == nullptr || first_group->grade <= 0 ||
+             second_group->grade <= 0 || std::abs(first_group->grade - second_group->grade) <= 1;
+    });
+  });
+}
+
+bool overlaps(const CandidateStart& first, const CandidateStart& second) {
+  return std::ranges::any_of(first.occupied_slots, [&](const domain::SlotId& slot) {
+    return std::ranges::find(second.occupied_slots, slot) != second.occupied_slots.end();
+  });
 }
 
 template <typename Id>
@@ -243,6 +268,34 @@ SolveResult solve(const SolveRequest& request) {
   add_no_overlap(model, group_occupancy);
   add_no_overlap(model, teacher_occupancy);
   add_no_overlap(model, room_occupancy);
+
+  for (std::size_t first_index = 0; first_index < variables.size(); ++first_index) {
+    const domain::Meeting& first = request.project.meetings[first_index];
+    if (!requires_room_feature(first, "gym")) {
+      continue;
+    }
+    for (std::size_t second_index = first_index + 1; second_index < variables.size();
+         ++second_index) {
+      const domain::Meeting& second = request.project.meetings[second_index];
+      if (!requires_room_feature(second, "gym") ||
+          gym_grades_compatible(request.project, first, second)) {
+        continue;
+      }
+      for (std::size_t first_mode = 0; first_mode < variables[first_index].modes.size();
+           ++first_mode) {
+        for (std::size_t second_mode = 0; second_mode < variables[second_index].modes.size();
+             ++second_mode) {
+          if (overlaps(variables[first_index].candidates->starts[first_mode],
+                       variables[second_index].candidates->starts[second_mode])) {
+            model.AddLessOrEqual(
+                sat::LinearExpr::Sum({variables[first_index].modes[first_mode].selected,
+                                      variables[second_index].modes[second_mode].selected}),
+                1);
+          }
+        }
+      }
+    }
+  }
 
   for (const domain::Teacher& teacher : request.project.teachers) {
     add_weighted_limit(model, weekly_teacher_load[teacher.id.value()], teacher.maximum_weekly_load);

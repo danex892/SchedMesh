@@ -1,6 +1,7 @@
 #include "schedmesh/validation/schedule_validator.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <map>
 #include <set>
 #include <string>
@@ -73,6 +74,7 @@ ValidationResult ScheduleValidator::validate(const domain::Project& project,
   std::set<std::string> group_occupancy;
   std::set<std::string> teacher_occupancy;
   std::set<std::string> room_occupancy;
+  std::map<domain::SlotId, std::vector<domain::StudentGroupId>> gym_groups_by_slot;
   std::map<domain::TeacherId, int> weekly_teacher_load;
   std::map<std::pair<domain::TeacherId, std::size_t>, int> daily_teacher_load;
   std::map<std::pair<domain::StudentGroupId, std::size_t>, std::vector<domain::SubjectId>>
@@ -219,6 +221,31 @@ ValidationResult ScheduleValidator::validate(const domain::Project& project,
           add_error(result, "schedule.room_overlap", path + "/start_slot",
                     "Room has overlapping meetings.", room_id.value(),
                     "Move one meeting or assign another room.");
+        }
+      }
+    }
+    const bool uses_gym = std::ranges::any_of(
+        meeting->room_requirements, [](const domain::RoomRequirement& requirement) {
+          return requirement.required_features.contains("gym");
+        });
+    if (uses_gym) {
+      for (const domain::Slot* slot : occupied) {
+        auto& scheduled_groups = gym_groups_by_slot[slot->id];
+        for (const domain::StudentGroupId& group_id : meeting->groups) {
+          const domain::StudentGroup* group = find_entity(project.student_groups, group_id);
+          const bool incompatible =
+              group != nullptr && group->grade > 0 &&
+              std::ranges::any_of(scheduled_groups, [&](const domain::StudentGroupId& other_id) {
+                const domain::StudentGroup* other = find_entity(project.student_groups, other_id);
+                return other != nullptr && other->grade > 0 &&
+                       std::abs(group->grade - other->grade) > 1;
+              });
+          if (incompatible) {
+            add_error(result, "schedule.gym_grade_conflict", path + "/start_slot",
+                      "Gym is shared by groups with incompatible grades.", group_id.value(),
+                      "Share the gym only with the same or an adjacent grade.");
+          }
+          scheduled_groups.push_back(group_id);
         }
       }
     }
