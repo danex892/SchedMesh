@@ -169,6 +169,7 @@ if(SCHEDMESH_BUILD_TESTS)
         tests/solver/smoke_solver_test.cpp
         src/solver/smoke_solver.cpp
         src/app/solve_command.cpp
+        src/app/migrate_command.cpp
     )
     target_include_directories(schedmesh-next-tests PRIVATE include tests)
     target_compile_features(schedmesh-next-tests PRIVATE cxx_std_20)

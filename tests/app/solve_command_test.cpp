@@ -8,6 +8,7 @@
 #include <sstream>
 #include <string>
 
+#include "schedmesh/app/migrate_command.h"
 #include "schedmesh/app/validate_command.h"
 
 namespace schedmesh::app {
@@ -61,6 +62,34 @@ TEST(SolveCommandTest, DoesNotCreateScheduleForMissingProject) {
   EXPECT_EQ(exit_code, kExitUsageOrIoError);
   EXPECT_FALSE(std::filesystem::exists(output_path));
   EXPECT_NE(errors.str().find("io.open_failed"), std::string::npos);
+}
+
+TEST(SolveCommandTest, ProvesHistoricalAcceptanceBaselineInfeasibleWithinBudget) {
+  const std::filesystem::path project_path =
+      std::filesystem::temp_directory_path() / "schedmesh-historical-project.json";
+  const std::filesystem::path schedule_path =
+      std::filesystem::temp_directory_path() / "schedmesh-historical-schedule.json";
+  std::filesystem::remove(project_path);
+  std::filesystem::remove(schedule_path);
+  std::ostringstream migration_output;
+  std::ostringstream migration_errors;
+  ASSERT_EQ(migrate_legacy_project("data/settings.conf", project_path.string(), migration_output,
+                                   migration_errors),
+            kExitSuccess);
+  std::ostringstream solve_output;
+  std::ostringstream solve_errors;
+  constexpr auto kHistoricalBudget = std::chrono::seconds{30};
+
+  const int exit_code =
+      solve_project_file(project_path.string(), schedule_path.string(),
+                         {.time_limit = kHistoricalBudget, .worker_count = 1, .random_seed = 1},
+                         solve_output, solve_errors);
+
+  EXPECT_EQ(exit_code, kExitValidationError);
+  EXPECT_NE(solve_output.str().find("status=infeasible"), std::string::npos);
+  EXPECT_TRUE(solve_errors.str().empty());
+  EXPECT_FALSE(std::filesystem::exists(schedule_path));
+  std::filesystem::remove(project_path);
 }
 
 }  // namespace
