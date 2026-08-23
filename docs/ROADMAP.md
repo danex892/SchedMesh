@@ -134,6 +134,8 @@ proven infeasible under reconstructed M3 semantics and remains an explicit M4 in
 
 ### M4 — Rooms and Full Historical Hard Rules
 
+**Status:** complete. See [M4 acceptance evidence](M4_ACCEPTANCE.md).
+
 - Reconstruct ambiguous historical room identities without inventing facilities.
 - Complete alternative and subgroup room assignment.
 - Enforce room features and capacity when canonical group sizes are available.

@@ -93,6 +93,11 @@ validates every returned schedule, and writes schedule JSON only for a valid fea
 or optimal result. See [M3 acceptance evidence](docs/M3_ACCEPTANCE.md) for current
 coverage and the bounded historical baseline.
 
+M4 completes canonical room reconstruction, per-lane capacity and feature enforcement,
+simultaneous subgroup room lanes, and the preserved gym sharing rule. The public Medium
+fixture is defined in `tests/fixtures/medium_project.h`; see
+[M4 acceptance evidence](docs/M4_ACCEPTANCE.md).
+
 The legacy generator remains available at:
 
 ```powershell

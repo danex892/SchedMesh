@@ -41,7 +41,7 @@ teaching periods. With one worker, seed 1, and a 30-second budget, the M3 model 
 reconstructed project infeasible and does not emit a schedule. The preserved legacy generator
 also failed to complete this dataset.
 
-This is a recorded baseline, not a fabricated success. M4 owns the remaining historical
-reconstruction work: ambiguous room identities, full room semantics, and any missing legacy
-hard-rule interpretation. A validator-approved historical schedule remains the M4 acceptance
-target.
+This is a recorded baseline, not a fabricated success. M4 subsequently reconstructs ambiguous
+room identities and full room semantics without changing that outcome. M5 owns bounded
+rule-family diagnostics for the remaining global infeasibility; a validator-approved historical
+schedule remains required before the release acceptance milestone.
