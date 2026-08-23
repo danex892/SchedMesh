@@ -11,6 +11,7 @@
 
 #include "schedmesh/app/validate_command.h"
 #include "schedmesh/io/project_json.h"
+#include "schedmesh/validation/room_audit.h"
 
 namespace schedmesh::app {
 namespace {
@@ -52,6 +53,12 @@ TEST(MigrateCommandTest, MigratesHistoricalFixtureToCanonicalJson) {
                         return total + meeting.duration_in_periods;
                       });
   EXPECT_EQ(meeting_periods, 964);
+  const validation::RoomAuditReport room_audit = validation::audit_rooms(*project.project);
+  EXPECT_EQ(room_audit.statistics.meetings_without_rooms, 0U);
+  EXPECT_GE(room_audit.statistics.room_lanes, project.project->meetings.size());
+  EXPECT_GT(room_audit.statistics.alternative_room_lanes, 0U);
+  EXPECT_GT(room_audit.statistics.feature_room_lanes, 0U);
+  EXPECT_FALSE(room_audit.has_proven_capacity_overload());
   EXPECT_NE(output.str().find("Migrated legacy project"), std::string::npos);
   EXPECT_EQ(errors.str().find("error "), std::string::npos);
   EXPECT_NE(errors.str().find("legacy.classrooms.special_code_interpreted"), std::string::npos);
