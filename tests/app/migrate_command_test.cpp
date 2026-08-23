@@ -42,7 +42,7 @@ TEST(MigrateCommandTest, MigratesHistoricalFixtureToCanonicalJson) {
   EXPECT_EQ(project.project->student_groups.size(), 27U);
   EXPECT_EQ(project.project->teachers.size(), 39U);
   EXPECT_EQ(project.project->subjects.size(), 40U);
-  EXPECT_EQ(project.project->rooms.size(), 37U);
+  EXPECT_EQ(project.project->rooms.size(), 41U);
   EXPECT_EQ(project.project->meetings.size(), 947U);
   EXPECT_EQ(project.project->calendar.periods.size(), 13U);
   EXPECT_EQ(project.project->calendar.slots.size(), 78U);
@@ -54,7 +54,7 @@ TEST(MigrateCommandTest, MigratesHistoricalFixtureToCanonicalJson) {
   EXPECT_EQ(meeting_periods, 964);
   EXPECT_NE(output.str().find("Migrated legacy project"), std::string::npos);
   EXPECT_EQ(errors.str().find("error "), std::string::npos);
-  EXPECT_NE(errors.str().find("legacy.classrooms.special_code"), std::string::npos);
+  EXPECT_NE(errors.str().find("legacy.classrooms.special_code_interpreted"), std::string::npos);
   EXPECT_NE(errors.str().find("legacy.entire_course_per_day.unimplemented_legacy_setting"),
             std::string::npos);
 

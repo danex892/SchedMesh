@@ -465,14 +465,41 @@ LegacyProjectImportResult import_legacy_resources(
       }
       const std::vector<std::string> room_names = split_semicolon_list(row[1]);
       if (room_names.size() == 1 && (room_names.front() == "S" || room_names.front() == "T")) {
-        ++result.report.ignored_fields;
+        const bool is_gym = room_names.front() == "S";
+        std::vector<domain::RoomId> candidates;
+        if (is_gym) {
+          for (int lane = 1; lane <= 2; ++lane) {
+            const std::string room_name = "Legacy gym lane " + std::to_string(lane);
+            const domain::RoomId room_id = ensure_room(
+                room_name, "room-legacy-gym-" + std::to_string(lane), {"gym"});
+            candidates.push_back(room_id);
+          }
+        } else {
+          const std::string room_name = "Legacy technology room for " + teacher_name;
+          const domain::RoomId room_id =
+              ensure_room(room_name, "room-legacy-technology-" + stable_component(teacher_name),
+                          {"technology"});
+          candidates.push_back(room_id);
+        }
+        for (domain::Meeting& meeting : project.meetings) {
+          for (const domain::TeacherRequirement& requirement : meeting.teacher_requirements) {
+            if (requirement.fixed_teacher == teacher->second) {
+              meeting.room_requirements.push_back(
+                  {.candidates = candidates,
+                   .required_features = {is_gym ? "gym" : "technology"},
+                   .lane = requirement.lane});
+            }
+          }
+        }
+        ++result.report.consumed_fields;
         result.report.diagnostics.push_back(
             {.severity = MigrationSeverity::kWarning,
-             .code = "legacy.classrooms.special_code",
+             .code = "legacy.classrooms.special_code_interpreted",
              .path = "/classrooms/rows/" + std::to_string(row_index) + "/rooms",
              .message = "Legacy room code '" + room_names.front() +
-                        "' has no explicit facility identity and was not converted.",
-             .suggested_action = "Replace the code with canonical room candidates and features."});
+                        "' was reconstructed as explicit canonical room resources.",
+             .suggested_action =
+                 "Confirm the inferred facilities against the private school inventory."});
         continue;
       }
 

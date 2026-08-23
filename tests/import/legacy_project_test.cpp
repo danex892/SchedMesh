@@ -224,7 +224,7 @@ TEST(LegacyProjectImportTest, DisambiguatesNormalizedRoomIdCollisions) {
   EXPECT_EQ(result.project->rooms[1].id, domain::RoomId{"room-room-a-2"});
 }
 
-TEST(LegacyProjectImportTest, DiagnosesSpecialRoomCodesWithoutInventingFacilities) {
+TEST(LegacyProjectImportTest, ReconstructsTwoLegacyGymLanes) {
   const CsvTable timetable = {{"", "Shifts", "1"},
                               {"", "Group", "5a"},
                               {"", "Double lessons", ""},
@@ -237,10 +237,33 @@ TEST(LegacyProjectImportTest, DiagnosesSpecialRoomCodesWithoutInventingFacilitie
       std::move(*timetable_result.project), {{"Teacher", "Rooms"}, {"Teacher A", "S"}});
 
   ASSERT_TRUE(result.ok());
-  EXPECT_TRUE(result.project->rooms.empty());
-  EXPECT_EQ(result.report.ignored_fields, 1U);
+  ASSERT_EQ(result.project->rooms.size(), 2U);
+  EXPECT_TRUE(result.project->rooms[0].features.contains("gym"));
+  ASSERT_EQ(result.project->meetings.front().room_requirements.size(), 1U);
+  EXPECT_EQ(result.project->meetings.front().room_requirements.front().candidates.size(), 2U);
+  EXPECT_EQ(result.report.consumed_fields, 1U);
   ASSERT_EQ(result.report.diagnostics.size(), 1U);
-  EXPECT_EQ(result.report.diagnostics.front().code, "legacy.classrooms.special_code");
+  EXPECT_EQ(result.report.diagnostics.front().code, "legacy.classrooms.special_code_interpreted");
+}
+
+TEST(LegacyProjectImportTest, ReconstructsDedicatedLegacyTechnologyRoom) {
+  const CsvTable timetable = {{"", "Shifts", "1"},
+                              {"", "Group", "5a"},
+                              {"", "Double lessons", ""},
+                              {"Teacher", "Subject", ""},
+                              {"Teacher A", "Technology", "1"}};
+  LegacyProjectImportResult timetable_result = import_legacy_timetable(settings(), timetable);
+  ASSERT_TRUE(timetable_result.ok());
+
+  const LegacyProjectImportResult result = import_legacy_resources(
+      std::move(*timetable_result.project), {{"Teacher", "Rooms"}, {"Teacher A", "T"}});
+
+  ASSERT_TRUE(result.ok());
+  ASSERT_EQ(result.project->rooms.size(), 1U);
+  EXPECT_TRUE(result.project->rooms.front().features.contains("technology"));
+  ASSERT_EQ(result.project->meetings.front().room_requirements.size(), 1U);
+  EXPECT_EQ(result.project->meetings.front().room_requirements.front().candidates,
+            (std::vector<domain::RoomId>{result.project->rooms.front().id}));
 }
 
 TEST(LegacyProjectImportTest, RejectsUnknownMethodicalDayWithoutPartialProject) {
