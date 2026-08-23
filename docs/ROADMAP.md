@@ -118,15 +118,19 @@ SchedMesh may be tagged `v1.0.0` when all of the following are true:
 
 **Exit evidence:** hand-written invalid schedules fail for the expected reasons.
 
-### M3 — Implement the CP-SAT Solver
+### M3 — Implement the CP-SAT Feasibility Solver
+
+**Status:** complete. See [M3 acceptance evidence](M3_ACCEPTANCE.md).
 
 - Map the canonical domain model into CP-SAT variables and constraints.
 - Keep constraint construction separate and testable.
-- Add weighted soft objectives and an objective breakdown.
+- Keep weighted and staged soft optimization in M6 of the detailed rewrite plan.
 - Add time limits, deterministic tiny fixtures, and cancellation.
 - Validate every returned schedule independently before exposing it to the UI.
 
-**Exit evidence:** the historical acceptance dataset produces a validator-approved schedule.
+**Exit evidence:** all Tiny feasibility boundaries pass, cancellation and deadlines are bounded,
+and every returned schedule passes independent validation. The preserved historical baseline is
+proven infeasible under reconstructed M3 semantics and remains an explicit M4 investigation.
 
 ### M4 — Deliver the Desktop Workflow
 
