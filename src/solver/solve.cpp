@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -35,8 +36,28 @@ struct MeetingVariables {
   std::vector<ModeVariables> modes;
 };
 
+struct WeightedVariables {
+  std::vector<sat::BoolVar> variables;
+  std::vector<std::int64_t> coefficients;
+};
+
 std::string occupancy_key(std::string_view resource, const domain::SlotId& slot) {
   return std::string(resource) + "@" + slot.value();
+}
+
+std::string day_key(std::string_view resource, std::size_t day) {
+  return std::string(resource) + "@" + std::to_string(day);
+}
+
+std::string subject_day_key(std::string_view group, std::size_t day, std::string_view subject) {
+  return std::string(group) + "@" + std::to_string(day) + "@" + std::string(subject);
+}
+
+template <typename Entity, typename EntityId>
+const Entity* find_entity(const std::vector<Entity>& entities, const EntityId& id) {
+  const auto found =
+      std::ranges::find_if(entities, [&](const Entity& entity) { return entity.id == id; });
+  return found == entities.end() ? nullptr : &*found;
 }
 
 template <typename Id>
@@ -73,6 +94,13 @@ void add_no_overlap(sat::CpModelBuilder& model,
     if (variables.size() > 1) {
       model.AddLessOrEqual(sat::LinearExpr::Sum(variables), 1);
     }
+  }
+}
+
+void add_weighted_limit(sat::CpModelBuilder& model, const WeightedVariables& terms,
+                        std::int64_t limit) {
+  if (!terms.variables.empty()) {
+    model.AddLessOrEqual(sat::LinearExpr::WeightedSum(terms.variables, terms.coefficients), limit);
   }
 }
 
@@ -133,6 +161,9 @@ SolveResult solve(const SolveRequest& request) {
   std::unordered_map<std::string, std::vector<sat::BoolVar>> group_occupancy;
   std::unordered_map<std::string, std::vector<sat::BoolVar>> teacher_occupancy;
   std::unordered_map<std::string, std::vector<sat::BoolVar>> room_occupancy;
+  std::unordered_map<std::string, WeightedVariables> weekly_teacher_load;
+  std::unordered_map<std::string, WeightedVariables> daily_teacher_load;
+  std::unordered_map<std::string, std::vector<sat::BoolVar>> group_day_subjects;
 
   for (std::size_t meeting_index = 0; meeting_index < candidates.meetings.size(); ++meeting_index) {
     const MeetingCandidates& meeting_candidates = candidates.meetings[meeting_index];
@@ -145,10 +176,14 @@ SolveResult solve(const SolveRequest& request) {
                                                       std::to_string(mode_index));
       ModeVariables mode_variables{.selected = mode, .teachers_by_lane = {}, .rooms_by_lane = {}};
       mode_selection.push_back(mode);
+      const domain::Slot* start = find_entity(request.project.calendar.slots, candidate.start_slot);
+      const std::size_t day = start->day_index;
       for (const domain::StudentGroupId& group : meeting.groups) {
         for (const domain::SlotId& slot : candidate.occupied_slots) {
           group_occupancy[occupancy_key(group.value(), slot)].push_back(mode);
         }
+        group_day_subjects[subject_day_key(group.value(), day, meeting.subject.value())].push_back(
+            mode);
       }
       for (std::size_t lane = 0; lane < candidate.eligible_teachers_by_lane.size(); ++lane) {
         mode_variables.teachers_by_lane.emplace_back();
@@ -157,6 +192,14 @@ SolveResult solve(const SolveRequest& request) {
                              mode_variables.teachers_by_lane.back());
         register_resource_occupancy(mode_variables.teachers_by_lane.back(),
                                     candidate.occupied_slots, teacher_occupancy);
+        for (const auto& choice : mode_variables.teachers_by_lane.back()) {
+          auto& weekly = weekly_teacher_load[choice.resource.value()];
+          weekly.variables.push_back(choice.selected);
+          weekly.coefficients.push_back(meeting.duration_in_periods);
+          auto& daily = daily_teacher_load[day_key(choice.resource.value(), day)];
+          daily.variables.push_back(choice.selected);
+          daily.coefficients.push_back(meeting.duration_in_periods);
+        }
       }
       for (std::size_t lane = 0; lane < candidate.eligible_rooms_by_lane.size(); ++lane) {
         mode_variables.rooms_by_lane.emplace_back();
@@ -175,6 +218,39 @@ SolveResult solve(const SolveRequest& request) {
   add_no_overlap(model, group_occupancy);
   add_no_overlap(model, teacher_occupancy);
   add_no_overlap(model, room_occupancy);
+
+  for (const domain::Teacher& teacher : request.project.teachers) {
+    add_weighted_limit(model, weekly_teacher_load[teacher.id.value()], teacher.maximum_weekly_load);
+    if (teacher.maximum_daily_load) {
+      for (std::size_t day = 0; day < request.project.calendar.days.size(); ++day) {
+        add_weighted_limit(model, daily_teacher_load[day_key(teacher.id.value(), day)],
+                           *teacher.maximum_daily_load);
+      }
+    }
+  }
+  for (const domain::StudentGroup& group : request.project.student_groups) {
+    for (std::size_t day = 0; day < request.project.calendar.days.size(); ++day) {
+      for (const domain::Subject& subject : request.project.subjects) {
+        const auto& occurrences =
+            group_day_subjects[subject_day_key(group.id.value(), day, subject.id.value())];
+        if (!group.allow_repeated_subjects_per_day && occurrences.size() > 1) {
+          model.AddLessOrEqual(sat::LinearExpr::Sum(occurrences), 1);
+        }
+        for (const domain::SubjectId& conflict_id : subject.conflicting_subjects) {
+          if (subject.id.value() >= conflict_id.value()) {
+            continue;
+          }
+          const auto& conflicts =
+              group_day_subjects[subject_day_key(group.id.value(), day, conflict_id.value())];
+          for (const sat::BoolVar& occurrence : occurrences) {
+            for (const sat::BoolVar& conflict : conflicts) {
+              model.AddLessOrEqual(sat::LinearExpr::Sum({occurrence, conflict}), 1);
+            }
+          }
+        }
+      }
+    }
+  }
 
   sat::SatParameters parameters;
   parameters.set_max_time_in_seconds(
