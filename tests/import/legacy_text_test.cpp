@@ -18,6 +18,17 @@ TEST(LegacyCsvTest, ReadsQuotedCommasEscapedQuotesAndNewlines) {
   EXPECT_EQ(result.report.source_records, 3U);
 }
 
+TEST(LegacyCsvTest, IgnoresUtf8ByteOrderMark) {
+  const CsvReadResult result = read_legacy_csv(
+      "\xEF\xBB\xBF"
+      "Teacher,Rooms\nTeacher 1,101\n");
+
+  ASSERT_TRUE(result.ok());
+  ASSERT_EQ(result.table->size(), 2U);
+  EXPECT_EQ((*result.table)[0][0], "Teacher");
+  EXPECT_EQ((*result.table)[0][1], "Rooms");
+}
+
 TEST(LegacyCsvTest, RejectsMalformedQuotedFieldsWithoutPartialTable) {
   const CsvReadResult result = read_legacy_csv("Teacher,Subject\n\"Teacher 1,Math\n");
 

@@ -1,8 +1,8 @@
 #include "schedmesh/import/legacy_project.h"
 
 #include <algorithm>
-#include <charconv>
 #include <cctype>
+#include <charconv>
 #include <map>
 #include <set>
 #include <string_view>
@@ -14,7 +14,7 @@ namespace {
 struct Column {
   std::size_t source_index{};
   int session{};
-  domain::StudentGroupId group_id;
+  std::vector<domain::StudentGroupId> group_ids;
 };
 
 std::string trim(std::string_view value) {
@@ -78,6 +78,25 @@ std::vector<std::string> split_profiles(std::string_view value) {
   return result;
 }
 
+std::size_t profile_count(const CsvTable& timetable, std::size_t source_index) {
+  std::size_t count = 1;
+  for (std::size_t row_index = 4; row_index < timetable.size(); ++row_index) {
+    if (source_index < timetable[row_index].size()) {
+      count = std::max(count, split_profiles(timetable[row_index][source_index]).size());
+    }
+  }
+  return count;
+}
+
+bool teachers_overlap(const domain::Meeting& first, const domain::Meeting& second) {
+  return std::ranges::any_of(first.teacher_requirements, [&](const auto& first_requirement) {
+    return first_requirement.fixed_teacher &&
+           std::ranges::any_of(second.teacher_requirements, [&](const auto& second_requirement) {
+             return second_requirement.fixed_teacher == first_requirement.fixed_teacher;
+           });
+  });
+}
+
 std::vector<std::string> split_semicolon_list(std::string_view value) {
   std::vector<std::string> result;
   std::size_t begin = 0;
@@ -102,11 +121,12 @@ int grade_of(std::string_view group_name) {
   return error == std::errc{} && end != group_name.data() ? grade : 0;
 }
 
-std::vector<domain::SlotId> allowed_slots(const domain::Project& project, const LegacySettings& settings,
-                                          int session) {
+std::vector<domain::SlotId> allowed_slots(const domain::Project& project,
+                                          const LegacySettings& settings, int session) {
   const std::size_t first_period =
-      settings.sessions == 1 ? 0U : static_cast<std::size_t>((session - 1) *
-                                                             (settings.maximum_lessons_per_session - 1));
+      settings.sessions == 1
+          ? 0U
+          : static_cast<std::size_t>((session - 1) * (settings.maximum_lessons_per_session - 1));
   const std::size_t end_period = first_period + settings.maximum_lessons_per_session;
   std::vector<domain::SlotId> result;
   for (const domain::Slot& slot : project.calendar.slots) {
@@ -124,8 +144,7 @@ std::vector<domain::SlotId> subject_allowed_slots(const domain::Project& project
   const std::size_t first_period =
       settings.sessions == 1
           ? 0U
-          : static_cast<std::size_t>((session - 1) *
-                                     (settings.maximum_lessons_per_session - 1));
+          : static_cast<std::size_t>((session - 1) * (settings.maximum_lessons_per_session - 1));
   const std::size_t last_period =
       first_period + static_cast<std::size_t>(settings.maximum_lessons_per_session - 1);
   std::erase_if(result, [&](const domain::SlotId& slot_id) {
@@ -142,9 +161,7 @@ std::vector<domain::SlotId> subject_allowed_slots(const domain::Project& project
 
 }  // namespace
 
-bool LegacyProjectImportResult::ok() const noexcept {
-  return project.has_value() && report.ok();
-}
+bool LegacyProjectImportResult::ok() const noexcept { return project.has_value() && report.ok(); }
 
 LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings,
                                                   const CsvTable& timetable) {
@@ -180,7 +197,7 @@ LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings
                     .ordinal = index});
   }
   const int period_count = settings.sessions == 1 ? settings.maximum_lessons_per_session
-                                                   : (settings.maximum_lessons_per_session * 2) - 1;
+                                                  : (settings.maximum_lessons_per_session * 2) - 1;
   std::vector<domain::Period> periods;
   periods.reserve(static_cast<std::size_t>(period_count));
   for (int index = 0; index < period_count; ++index) {
@@ -202,8 +219,16 @@ LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings
     }
     const std::string component = stable_component(group_name);
     const int occurrence = ++group_occurrences[component];
-    const domain::StudentGroupId group_id{
+    const domain::StudentGroupId base_group_id{
         "group-" + component + (occurrence == 1 ? "" : "-" + std::to_string(occurrence))};
+    const std::size_t profiles = profile_count(timetable, source_index);
+    if (profiles > 2) {
+      add_error(result.report, "legacy.timetable.unsupported_profile_count",
+                "/timetable/columns/" + std::to_string(source_index),
+                "A group column contains more than two profile lanes.",
+                "Split the curriculum into at most two legacy profile lanes.");
+      continue;
+    }
     const std::string repeated_subjects = trim(timetable[2][source_index]);
     if (!repeated_subjects.empty() && repeated_subjects != "0" && repeated_subjects != "1") {
       add_error(result.report, "legacy.timetable.invalid_repeated_subject_policy",
@@ -212,20 +237,31 @@ LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings
                 "Use 1 to allow repeated subjects on the same day, otherwise 0 or empty.");
       continue;
     }
-    project.student_groups.push_back({.id = group_id,
-                                      .display_name = group_name,
-                                      .grade = grade_of(group_name),
-                                      .allowed_slots = allowed_slots(project, settings, *session),
-                                      .allow_repeated_subjects_per_day =
-                                          repeated_subjects == "1"});
-    columns.push_back({.source_index = source_index, .session = *session, .group_id = group_id});
+    std::vector<domain::StudentGroupId> group_ids;
+    group_ids.reserve(profiles);
+    for (std::size_t profile = 0; profile < profiles; ++profile) {
+      const domain::StudentGroupId group_id{
+          base_group_id.value() + (profiles == 1 ? "" : "-profile-" + std::to_string(profile + 1))};
+      project.student_groups.push_back(
+          {.id = group_id,
+           .display_name =
+               group_name + (profiles == 1 ? "" : " / profile " + std::to_string(profile + 1)),
+           .grade = grade_of(group_name),
+           .allowed_slots = allowed_slots(project, settings, *session),
+           .allow_repeated_subjects_per_day = repeated_subjects == "1"});
+      group_ids.push_back(group_id);
+    }
+    columns.push_back(
+        {.source_index = source_index, .session = *session, .group_ids = std::move(group_ids)});
     ++result.report.consumed_fields;
   }
 
   std::map<std::string, std::size_t, std::less<>> teacher_indices;
+  std::map<std::string, int, std::less<>> teacher_occurrences;
   std::map<std::string, domain::SubjectId, std::less<>> subject_ids;
   std::map<std::string, int, std::less<>> subject_occurrences;
   std::map<std::string, std::vector<std::size_t>, std::less<>> meeting_batches;
+  std::map<std::size_t, std::vector<std::vector<std::size_t>>> profile_meetings;
   std::string current_teacher;
   for (std::size_t row_index = 4; row_index < timetable.size(); ++row_index) {
     const CsvRow& row = timetable[row_index];
@@ -260,21 +296,23 @@ LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings
     } else {
       teacher_index = project.teachers.size();
       teacher_indices.emplace(current_teacher, teacher_index);
-      project.teachers.push_back({.id = domain::TeacherId{"teacher-" + stable_component(current_teacher)},
-                                  .display_name = current_teacher});
+      const std::string component = stable_component(current_teacher);
+      const int occurrence = ++teacher_occurrences[component];
+      project.teachers.push_back(
+          {.id = domain::TeacherId{"teacher-" + component +
+                                   (occurrence == 1 ? "" : "-" + std::to_string(occurrence))},
+           .display_name = current_teacher});
     }
     domain::Teacher& teacher = project.teachers[teacher_index];
     auto subject_iterator = subject_ids.find(subject_name);
     if (subject_iterator == subject_ids.end()) {
       const std::string component = stable_component(subject_name);
       const int occurrence = ++subject_occurrences[component];
-      const domain::SubjectId subject_id{
-          "subject-" + component +
-          (occurrence == 1 ? "" : "-" + std::to_string(occurrence))};
+      const domain::SubjectId subject_id{"subject-" + component +
+                                         (occurrence == 1 ? "" : "-" + std::to_string(occurrence))};
       subject_iterator = subject_ids.emplace(subject_name, subject_id).first;
-      const bool forbid_boundary =
-          std::ranges::find(settings.not_first_or_last, subject_name) !=
-          settings.not_first_or_last.end();
+      const bool forbid_boundary = std::ranges::find(settings.not_first_or_last, subject_name) !=
+                                   settings.not_first_or_last.end();
       const int required_consecutive_periods =
           std::ranges::find(settings.double_lessons, subject_name) != settings.double_lessons.end()
               ? 2
@@ -288,7 +326,8 @@ LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings
     const domain::SubjectId subject_id = subject_iterator->second;
     const domain::Subject& subject = *std::ranges::find_if(
         project.subjects, [&](const domain::Subject& item) { return item.id == subject_id; });
-    if (std::ranges::find(teacher.qualified_subjects, subject_id) == teacher.qualified_subjects.end()) {
+    if (std::ranges::find(teacher.qualified_subjects, subject_id) ==
+        teacher.qualified_subjects.end()) {
       teacher.qualified_subjects.push_back(subject_id);
     }
 
@@ -297,6 +336,14 @@ LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings
         continue;
       }
       const std::vector<std::string> profiles = split_profiles(row[column.source_index]);
+      if (profiles.size() != 1 && profiles.size() != column.group_ids.size()) {
+        add_error(result.report, "legacy.timetable.inconsistent_profile_count",
+                  "/timetable/rows/" + std::to_string(row_index) + "/columns/" +
+                      std::to_string(column.source_index),
+                  "Profile hours do not match the number of lanes used by the group column.",
+                  "Use either one whole-group value or the same number of slash-separated values.");
+        continue;
+      }
       for (std::size_t profile = 0; profile < profiles.size(); ++profile) {
         const std::optional<int> hours = parse_nonnegative_integer(profiles[profile]);
         if (!hours) {
@@ -312,16 +359,23 @@ LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings
           continue;
         }
         if (*hours % subject.required_consecutive_periods != 0) {
-          add_error(result.report, "legacy.timetable.incomplete_consecutive_block",
-                    "/timetable/rows/" + std::to_string(row_index) + "/columns/" +
-                        std::to_string(column.source_index),
-                    "Weekly hours cannot be divided into the subject's required consecutive blocks.",
-                    "Use a weekly hour count divisible by " +
-                        std::to_string(subject.required_consecutive_periods) + ".");
+          add_error(
+              result.report, "legacy.timetable.incomplete_consecutive_block",
+              "/timetable/rows/" + std::to_string(row_index) + "/columns/" +
+                  std::to_string(column.source_index),
+              "Weekly hours cannot be divided into the subject's required consecutive blocks.",
+              "Use a weekly hour count divisible by " +
+                  std::to_string(subject.required_consecutive_periods) + ".");
           continue;
         }
-        const std::string batch_key = column.group_id.value() + "\n" + subject_id.value() + "\n" +
-                                      std::to_string(profile) + "\n" + std::to_string(*hours);
+        const bool whole_group = profiles.size() == 1;
+        const std::vector<domain::StudentGroupId> meeting_groups =
+            whole_group ? column.group_ids
+                        : std::vector<domain::StudentGroupId>{column.group_ids[profile]};
+        const std::string lane_key =
+            whole_group ? "whole" : "profile-" + std::to_string(profile + 1);
+        const std::string batch_key = column.group_ids.front().value() + "\n" + subject_id.value() +
+                                      "\n" + lane_key + "\n" + std::to_string(*hours);
         auto& batch = meeting_batches[batch_key];
         if (batch.empty()) {
           const int occurrence_count = *hours / subject.required_consecutive_periods;
@@ -330,16 +384,21 @@ LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings
             project.meetings.push_back(
                 {.id = domain::MeetingId{"meeting-" + std::to_string(meeting_number)},
                  .subject = subject_id,
-                 .groups = {column.group_id},
+                 .groups = meeting_groups,
                  .teacher_requirements = {{.fixed_teacher = teacher.id, .lane = 0}},
                  .allowed_start_slots =
                      subject_allowed_slots(project, settings, column.session, subject),
                  .duration_in_periods = subject.required_consecutive_periods,
-                 .distribution_key = column.group_id.value() + "-" + subject_id.value() +
-                                     (profiles.size() == 1
-                                          ? ""
-                                          : "-profile-" + std::to_string(profile + 1))});
+                 .distribution_key = column.group_ids.front().value() + "-" + subject_id.value() +
+                                     "-" + lane_key + "-weekly-" + std::to_string(*hours)});
             batch.push_back(project.meetings.size() - 1);
+          }
+          if (!whole_group) {
+            auto& lanes = profile_meetings[column.source_index];
+            if (lanes.empty()) {
+              lanes.resize(column.group_ids.size());
+            }
+            lanes[profile].insert(lanes[profile].end(), batch.begin(), batch.end());
           }
         } else {
           for (const std::size_t meeting_index : batch) {
@@ -351,6 +410,52 @@ LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings
         teacher.maximum_weekly_load += *hours;
         ++result.report.consumed_fields;
       }
+    }
+  }
+
+  for (const auto& [source_index, lanes] : profile_meetings) {
+    if (lanes.size() != 2 || lanes[0].size() != lanes[1].size()) {
+      add_error(result.report, "legacy.timetable.unbalanced_profile_hours",
+                "/timetable/columns/" + std::to_string(source_index),
+                "Profile lanes contain different weekly hour totals.",
+                "Balance the two profile curricula before migration.");
+      continue;
+    }
+    std::vector<int> right_matches(lanes[1].size(), -1);
+    for (std::size_t left = 0; left < lanes[0].size(); ++left) {
+      std::vector<bool> visited(lanes[1].size(), false);
+      const auto augment = [&](const auto& self, std::size_t candidate) -> bool {
+        for (std::size_t right = 0; right < lanes[1].size(); ++right) {
+          if (visited[right] || teachers_overlap(project.meetings[lanes[0][candidate]],
+                                                 project.meetings[lanes[1][right]])) {
+            continue;
+          }
+          visited[right] = true;
+          if (right_matches[right] < 0 ||
+              self(self, static_cast<std::size_t>(right_matches[right]))) {
+            right_matches[right] = static_cast<int>(candidate);
+            return true;
+          }
+        }
+        return false;
+      };
+      if (!augment(augment, left)) {
+        add_error(result.report, "legacy.timetable.profile_pairing_impossible",
+                  "/timetable/columns/" + std::to_string(source_index),
+                  "Profile lessons cannot be paired without assigning one teacher twice.",
+                  "Correct the profile staffing or split overloaded teacher assignments.");
+        break;
+      }
+    }
+    for (std::size_t right = 0; right < right_matches.size(); ++right) {
+      if (right_matches[right] < 0) {
+        continue;
+      }
+      const std::string key = "legacy-profile-column-" + std::to_string(source_index) + "-pair-" +
+                              std::to_string(right + 1);
+      project.meetings[lanes[0][static_cast<std::size_t>(right_matches[right])]]
+          .simultaneity_keys.push_back(key);
+      project.meetings[lanes[1][right]].simultaneity_keys.push_back(key);
     }
   }
 
@@ -366,8 +471,8 @@ LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings
           {.severity = MigrationSeverity::kWarning,
            .code = "legacy.conflicts.unknown_subject",
            .path = "/config/conflicts",
-           .message = "Subject conflict references a subject absent from the timetable: " +
-                      conflict_name,
+           .message =
+               "Subject conflict references a subject absent from the timetable: " + conflict_name,
            .suggested_action = "Correct the configured subject names or remove the stale rule."});
       continue;
     }
@@ -391,9 +496,10 @@ LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings
         {.severity = MigrationSeverity::kWarning,
          .code = "legacy.entire_course_per_day.unimplemented_legacy_setting",
          .path = "/config/entire_course_per_day",
-         .message = "Legacy loaded but never enforced entire_course_per_day for subject: " +
-                    subject_name,
-         .suggested_action = "Define the intended scheduling policy explicitly before enabling it."});
+         .message =
+             "Legacy loaded but never enforced entire_course_per_day for subject: " + subject_name,
+         .suggested_action =
+             "Define the intended scheduling policy explicitly before enabling it."});
   }
 
   if (result.report.ok()) {
@@ -402,9 +508,9 @@ LegacyProjectImportResult import_legacy_timetable(const LegacySettings& settings
   return result;
 }
 
-LegacyProjectImportResult import_legacy_resources(
-    domain::Project project, const CsvTable& classrooms,
-    const std::optional<CsvTable>& methodical_days) {
+LegacyProjectImportResult import_legacy_resources(domain::Project project,
+                                                  const CsvTable& classrooms,
+                                                  const std::optional<CsvTable>& methodical_days) {
   LegacyProjectImportResult result;
   result.report.source_records =
       classrooms.size() + (methodical_days ? methodical_days->size() : 0U);
@@ -431,8 +537,7 @@ LegacyProjectImportResult import_legacy_resources(
     domain::RoomId room_id{unique_id};
     rooms.emplace(display_name, room_id);
     room_ids.insert(unique_id);
-    project.rooms.push_back(
-        {.id = room_id, .display_name = display_name, .features = features});
+    project.rooms.push_back({.id = room_id, .display_name = display_name, .features = features});
     return room_id;
   };
 
@@ -464,14 +569,37 @@ LegacyProjectImportResult import_legacy_resources(
         continue;
       }
       const std::vector<std::string> room_names = split_semicolon_list(row[1]);
+      if (room_names.empty()) {
+        const std::string room_name = "Unmapped room for " + teacher_name;
+        const domain::RoomId room_id =
+            ensure_room(room_name, "room-unmapped-" + stable_component(teacher_name));
+        for (domain::Meeting& meeting : project.meetings) {
+          for (const domain::TeacherRequirement& requirement : meeting.teacher_requirements) {
+            if (requirement.fixed_teacher == teacher->second) {
+              meeting.room_requirements.push_back(
+                  {.candidates = {room_id}, .lane = requirement.lane});
+            }
+          }
+        }
+        ++result.report.consumed_fields;
+        result.report.diagnostics.push_back(
+            {.severity = MigrationSeverity::kWarning,
+             .code = "legacy.classrooms.unmapped_room_interpreted",
+             .path = "/classrooms/rows/" + std::to_string(row_index) + "/rooms",
+             .message = "An empty legacy room mapping was reconstructed as a teacher-specific "
+                        "placeholder room.",
+             .suggested_action =
+                 "Replace the placeholder with the actual shared room when it becomes known."});
+        continue;
+      }
       if (room_names.size() == 1 && (room_names.front() == "S" || room_names.front() == "T")) {
         const bool is_gym = room_names.front() == "S";
         std::vector<domain::RoomId> candidates;
         if (is_gym) {
           for (int lane = 1; lane <= 2; ++lane) {
             const std::string room_name = "Legacy gym lane " + std::to_string(lane);
-            const domain::RoomId room_id = ensure_room(
-                room_name, "room-legacy-gym-" + std::to_string(lane), {"gym"});
+            const domain::RoomId room_id =
+                ensure_room(room_name, "room-legacy-gym-" + std::to_string(lane), {"gym"});
             candidates.push_back(room_id);
           }
         } else {
@@ -547,9 +675,11 @@ LegacyProjectImportResult import_legacy_resources(
               {.severity = MigrationSeverity::kWarning,
                .code = "legacy.methodical_days.unknown_teacher",
                .path = "/methodical_days/rows/" + std::to_string(row_index) + "/teacher",
-               .message = "Methodical-day mapping references a teacher absent from the timetable: " +
-                          teacher_name,
-               .suggested_action = "Correct the teacher name or add the teacher to the timetable."});
+               .message =
+                   "Methodical-day mapping references a teacher absent from the timetable: " +
+                   teacher_name,
+               .suggested_action =
+                   "Correct the teacher name or add the teacher to the timetable."});
           continue;
         }
         domain::Teacher& teacher = *std::ranges::find_if(

@@ -47,6 +47,32 @@ TEST(LegacyProjectImportTest, ConvertsRepeatedSubjectRowsIntoSimultaneousTeacher
   EXPECT_EQ(result.project->meetings[0].teacher_requirements[1].lane, 1);
 }
 
+TEST(LegacyProjectImportTest, ConvertsSlashProfilesIntoParallelStudentLanes) {
+  const CsvTable table = {{"", "Shifts", "1"},
+                          {"", "Group", "10a"},
+                          {"", "Double lessons", ""},
+                          {"Teacher", "Subject", ""},
+                          {"Teacher A", "Whole class", "1"},
+                          {"", "Profile A", "1/0"},
+                          {"Teacher B", "Profile B", "0/1"}};
+
+  const LegacyProjectImportResult result = import_legacy_timetable(settings(), table);
+
+  ASSERT_TRUE(result.ok());
+  ASSERT_EQ(result.project->student_groups.size(), 2U);
+  EXPECT_EQ(result.project->student_groups[0].id, domain::StudentGroupId{"group-10a-profile-1"});
+  EXPECT_EQ(result.project->student_groups[1].id, domain::StudentGroupId{"group-10a-profile-2"});
+  ASSERT_EQ(result.project->meetings.size(), 3U);
+  EXPECT_EQ(result.project->meetings[0].groups.size(), 2U);
+  EXPECT_EQ(result.project->meetings[1].groups,
+            (std::vector{domain::StudentGroupId{"group-10a-profile-1"}}));
+  EXPECT_EQ(result.project->meetings[2].groups,
+            (std::vector{domain::StudentGroupId{"group-10a-profile-2"}}));
+  ASSERT_EQ(result.project->meetings[1].simultaneity_keys.size(), 1U);
+  EXPECT_EQ(result.project->meetings[1].simultaneity_keys,
+            result.project->meetings[2].simultaneity_keys);
+}
+
 TEST(LegacyProjectImportTest, AssignsOneRoomLaneToEachSimultaneousSubgroup) {
   const CsvTable table = {{"", "Shifts", "1"},
                           {"", "Group", "5a"},
@@ -72,6 +98,28 @@ TEST(LegacyProjectImportTest, AssignsOneRoomLaneToEachSimultaneousSubgroup) {
   EXPECT_EQ(meeting.room_requirements[1].candidates.size(), 2U);
 }
 
+TEST(LegacyProjectImportTest, ReconstructsEmptyRoomAsTeacherSpecificPlaceholder) {
+  const CsvTable table = {{"", "Shifts", "1"},
+                          {"", "Group", "5a"},
+                          {"", "Double lessons", ""},
+                          {"Teacher", "Subject", ""},
+                          {"Teacher A", "Language", "1"}};
+  LegacyProjectImportResult timetable_result = import_legacy_timetable(settings(), table);
+  ASSERT_TRUE(timetable_result.ok());
+
+  const LegacyProjectImportResult result = import_legacy_resources(
+      std::move(*timetable_result.project), {{"Teacher", "Rooms"}, {"Teacher A", ""}});
+
+  ASSERT_TRUE(result.ok());
+  ASSERT_EQ(result.project->rooms.size(), 1U);
+  EXPECT_EQ(result.project->rooms.front().id.value(), "room-unmapped-teacher-a");
+  ASSERT_EQ(result.project->meetings.front().room_requirements.size(), 1U);
+  EXPECT_EQ(result.project->meetings.front().room_requirements.front().candidates,
+            std::vector<domain::RoomId>{domain::RoomId{"room-unmapped-teacher-a"}});
+  ASSERT_EQ(result.report.diagnostics.size(), 1U);
+  EXPECT_EQ(result.report.diagnostics.front().code, "legacy.classrooms.unmapped_room_interpreted");
+}
+
 TEST(LegacyProjectImportTest, DisambiguatesSubjectIdsAfterNormalization) {
   const CsvTable table = {{"", "Shifts", "1"},           {"", "Group", "5a"},
                           {"", "Double lessons", ""},    {"Teacher", "Subject", ""},
@@ -83,6 +131,19 @@ TEST(LegacyProjectImportTest, DisambiguatesSubjectIdsAfterNormalization) {
   ASSERT_EQ(result.project->subjects.size(), 2U);
   EXPECT_EQ(result.project->subjects[0].id.value(), "subject-italian");
   EXPECT_EQ(result.project->subjects[1].id.value(), "subject-italian-2");
+}
+
+TEST(LegacyProjectImportTest, DisambiguatesTeacherIdsForUnicodeNames) {
+  const CsvTable table = {{"", "Shifts", "1"},        {"", "Group", "5a"},
+                          {"", "Double lessons", ""}, {"Teacher", "Subject", ""},
+                          {"Иванов", "Math", "1"},    {"Петров", "Language", "1"}};
+
+  const LegacyProjectImportResult result = import_legacy_timetable(settings(), table);
+
+  ASSERT_TRUE(result.ok());
+  ASSERT_EQ(result.project->teachers.size(), 2U);
+  EXPECT_EQ(result.project->teachers[0].id.value(), "teacher-unnamed");
+  EXPECT_EQ(result.project->teachers[1].id.value(), "teacher-unnamed-2");
 }
 
 TEST(LegacyProjectImportTest, RemovesForbiddenSessionBoundarySlots) {

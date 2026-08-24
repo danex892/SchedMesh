@@ -40,11 +40,11 @@ TEST(MigrateCommandTest, MigratesHistoricalFixtureToCanonicalJson) {
   EXPECT_FALSE(project.project->teachers.empty());
   EXPECT_FALSE(project.project->meetings.empty());
   EXPECT_FALSE(project.project->rooms.empty());
-  EXPECT_EQ(project.project->student_groups.size(), 27U);
+  EXPECT_EQ(project.project->student_groups.size(), 29U);
   EXPECT_EQ(project.project->teachers.size(), 39U);
-  EXPECT_EQ(project.project->subjects.size(), 40U);
+  EXPECT_EQ(project.project->subjects.size(), 41U);
   EXPECT_EQ(project.project->rooms.size(), 41U);
-  EXPECT_EQ(project.project->meetings.size(), 947U);
+  EXPECT_EQ(project.project->meetings.size(), 952U);
   EXPECT_EQ(project.project->calendar.periods.size(), 13U);
   EXPECT_EQ(project.project->calendar.slots.size(), 78U);
   const int meeting_periods =
@@ -52,7 +52,7 @@ TEST(MigrateCommandTest, MigratesHistoricalFixtureToCanonicalJson) {
                       [](int total, const domain::Meeting& meeting) {
                         return total + meeting.duration_in_periods;
                       });
-  EXPECT_EQ(meeting_periods, 964);
+  EXPECT_EQ(meeting_periods, 969);
   const validation::RoomAuditReport room_audit = validation::audit_rooms(*project.project);
   EXPECT_EQ(room_audit.statistics.meetings_without_rooms, 0U);
   EXPECT_GE(room_audit.statistics.room_lanes, project.project->meetings.size());

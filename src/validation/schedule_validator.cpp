@@ -62,6 +62,11 @@ std::string occupancy_key(std::string_view resource_id, const domain::SlotId& sl
   return result;
 }
 
+std::string distribution_day_key(const domain::StudentGroupId& group_id, std::size_t day,
+                                 std::string_view distribution_key) {
+  return group_id.value() + "\n" + std::to_string(day) + "\n" + std::string(distribution_key);
+}
+
 std::optional<int> daily_occurrence_limit(const domain::Subject& subject,
                                           const domain::StudentGroup& group) {
   if (subject.maximum_occurrences_per_day) {
@@ -91,6 +96,7 @@ ValidationResult ScheduleValidator::validate(const domain::Project& project,
   std::map<std::pair<domain::TeacherId, std::size_t>, int> daily_teacher_load;
   std::map<std::pair<domain::StudentGroupId, std::size_t>, std::vector<domain::SubjectId>>
       group_day_subjects;
+  std::map<std::string, int, std::less<>> group_day_distributions;
   std::map<std::string, domain::SlotId, std::less<>> simultaneity_starts;
 
   for (std::size_t index = 0; index < schedule.meetings.size(); ++index) {
@@ -160,13 +166,15 @@ ValidationResult ScheduleValidator::validate(const domain::Project& project,
       auto& subjects = group_day_subjects[{group_id, start->day_index}];
       const domain::Subject* subject = find_entity(project.subjects, meeting->subject);
       if (group != nullptr && subject != nullptr) {
-        const auto scheduled_occurrences = std::ranges::count(subjects, subject->id);
+        int& scheduled_occurrences = group_day_distributions[distribution_day_key(
+            group_id, start->day_index, meeting->distribution_key)];
         const std::optional<int> occurrence_limit = daily_occurrence_limit(*subject, *group);
         if (occurrence_limit && scheduled_occurrences >= *occurrence_limit) {
           add_error(result, "schedule.repeated_subject_on_day", path + "/start_slot",
                     "Student group exceeds the subject's daily occurrence limit.", group_id.value(),
                     "Move one occurrence to another day or relax the policy.");
         }
+        ++scheduled_occurrences;
         if (std::ranges::any_of(subjects, [&](const domain::SubjectId& scheduled_subject) {
               return contains(subject->conflicting_subjects, scheduled_subject);
             })) {

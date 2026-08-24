@@ -92,14 +92,14 @@ inline domain::Project make_medium_project() {
 
   const auto meeting = [&](std::string id, SubjectId subject, StudentGroupId group,
                            TeacherId teacher, RoomRequirement room, int duration = 1) {
-    return Meeting{.id = MeetingId{std::move(id)},
+    return Meeting{.id = MeetingId{id},
                    .subject = std::move(subject),
                    .groups = {std::move(group)},
                    .teacher_requirements = {{.fixed_teacher = std::move(teacher), .lane = 0}},
                    .room_requirements = {std::move(room)},
                    .allowed_start_slots = all_slots,
                    .duration_in_periods = duration,
-                   .distribution_key = "medium"};
+                   .distribution_key = std::move(id)};
   };
   project.meetings = {meeting("meeting-math-07", SubjectId{"subject-math"},
                               StudentGroupId{"group-07"}, TeacherId{"teacher-math"},

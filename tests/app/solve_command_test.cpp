@@ -67,7 +67,7 @@ TEST(SolveCommandTest, DoesNotCreateScheduleForMissingProject) {
   EXPECT_NE(errors.str().find("io.open_failed"), std::string::npos);
 }
 
-TEST(SolveCommandTest, ProvesHistoricalAcceptanceBaselineInfeasibleWithinBudget) {
+TEST(SolveCommandTest, SolvesHistoricalAcceptanceFixtureWithinBudget) {
   const std::filesystem::path project_path =
       std::filesystem::temp_directory_path() / "schedmesh-historical-project.json";
   const std::filesystem::path schedule_path =
@@ -88,11 +88,12 @@ TEST(SolveCommandTest, ProvesHistoricalAcceptanceBaselineInfeasibleWithinBudget)
                          {.time_limit = kHistoricalBudget, .worker_count = 1, .random_seed = 1},
                          solve_output, solve_errors);
 
-  EXPECT_EQ(exit_code, kExitValidationError);
-  EXPECT_NE(solve_output.str().find("status=infeasible"), std::string::npos);
+  EXPECT_EQ(exit_code, kExitSuccess);
+  EXPECT_NE(solve_output.str().find("status=optimal"), std::string::npos);
   EXPECT_TRUE(solve_errors.str().empty());
-  EXPECT_FALSE(std::filesystem::exists(schedule_path));
+  EXPECT_TRUE(std::filesystem::exists(schedule_path));
   std::filesystem::remove(project_path);
+  std::filesystem::remove(schedule_path);
 }
 
 TEST(SolveCommandTest, CancelsHistoricalSolveDuringActiveSearch) {

@@ -272,6 +272,19 @@ TEST(SolveTest, ProvesRepeatedSubjectOnOneDayInfeasible) {
   EXPECT_EQ(result.status, SolveStatus::kInfeasible);
 }
 
+TEST(SolveTest, AllowsDistinctCoursesOfTheSameSubjectOnOneDay) {
+  domain::Project project = one_day_two_period_project();
+  project.teachers.front().maximum_weekly_load = 2;
+  add_second_meeting(project);
+  project.meetings.back().distribution_key = "math-subgroup-course";
+
+  const SolveResult result = solve({.project = project});
+
+  EXPECT_EQ(result.status, SolveStatus::kOptimal);
+  ASSERT_TRUE(result.schedule.has_value());
+  EXPECT_TRUE(result.diagnostics.ok());
+}
+
 TEST(SolveTest, AppliesSubjectSpecificDailyOccurrenceLimit) {
   domain::Project project = one_day_three_period_project();
   project.student_groups.front().allow_repeated_subjects_per_day = true;

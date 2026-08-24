@@ -157,6 +157,24 @@ TEST(ScheduleValidatorTest, RejectsTeacherDailyLoadExcess) {
   EXPECT_TRUE(has_code(result, "schedule.teacher_daily_load"));
 }
 
+TEST(ScheduleValidatorTest, AllowsDistinctCoursesOfTheSameSubjectOnOneDay) {
+  domain::Project project = two_period_project();
+  project.teachers.front().maximum_weekly_load = 2;
+  domain::Meeting second = project.meetings.front();
+  second.id = domain::MeetingId{"meeting-002"};
+  second.distribution_key = "math-subgroup-course";
+  project.meetings.push_back(second);
+  domain::Schedule schedule = tiny_schedule();
+  schedule.meetings.push_back({.meeting = second.id,
+                               .start_slot = domain::SlotId{"slot-mon-p2"},
+                               .teachers = {domain::TeacherId{"teacher-001"}},
+                               .rooms = {domain::RoomId{"room-001"}}});
+
+  const ValidationResult result = ScheduleValidator{}.validate(project, schedule);
+
+  EXPECT_TRUE(result.ok());
+}
+
 TEST(ScheduleValidatorTest, RejectsConflictingSubjectsOnTheSameDay) {
   domain::Project project = two_period_project();
   project.subjects.front().conflicting_subjects = {domain::SubjectId{"subject-science"}};

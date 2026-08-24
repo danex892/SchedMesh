@@ -38,6 +38,10 @@ bool LegacyConfigReadResult::ok() const noexcept { return config.has_value() && 
 
 CsvReadResult read_legacy_csv(std::string_view contents) {
   CsvReadResult result;
+  constexpr std::string_view utf8_bom = "\xEF\xBB\xBF";
+  if (contents.starts_with(utf8_bom)) {
+    contents.remove_prefix(utf8_bom.size());
+  }
   CsvTable table;
   CsvRow row;
   std::string field;
@@ -90,8 +94,8 @@ CsvReadResult read_legacy_csv(std::string_view contents) {
         ++line;
       }
     } else if (quote_closed) {
-      add_error(result.report, "legacy.csv.characters_after_quote", "/lines/" + std::to_string(line),
-                "Unexpected characters after a closing quote.",
+      add_error(result.report, "legacy.csv.characters_after_quote",
+                "/lines/" + std::to_string(line), "Unexpected characters after a closing quote.",
                 "Place the closing quote immediately before a comma or line ending.");
       break;
     } else if (character == '"') {
@@ -108,7 +112,8 @@ CsvReadResult read_legacy_csv(std::string_view contents) {
     add_error(result.report, "legacy.csv.unclosed_quote", "/lines/" + std::to_string(line),
               "The CSV input ended inside a quoted field.", "Add the missing closing quote.");
   }
-  if (result.report.ok() && (!contents.empty() && contents.back() != '\n' && contents.back() != '\r')) {
+  if (result.report.ok() &&
+      (!contents.empty() && contents.back() != '\n' && contents.back() != '\r')) {
     finish_row();
   }
   if (result.report.ok()) {

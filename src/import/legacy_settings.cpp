@@ -13,9 +13,9 @@ constexpr int kMaximumDays = 31;
 constexpr int kMaximumLessonsPerSession = 48;
 
 constexpr std::array<std::string_view, 15> kRuntimeOnlyKeys = {
-    "steps",       "debug",          "debug_fstpl",  "debug_file", "checkday",
-    "bugday",      "bugclass",       "reset_days",   "errors_limit", "randtype",
-    "random_seed", "threads",        "improve_timetable", "tofile", "output_file"};
+    "steps",       "debug",    "debug_fstpl",       "debug_file",   "checkday",
+    "bugday",      "bugclass", "reset_days",        "errors_limit", "randtype",
+    "random_seed", "threads",  "improve_timetable", "tofile",       "output_file"};
 
 void add_diagnostic(MigrationReport& report, MigrationSeverity severity, std::string code,
                     std::string path, std::string message, std::string action) {
@@ -59,11 +59,11 @@ bool read_integer(const LegacyConfig& config, std::string_view key, int minimum,
   const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), parsed);
   if (error != std::errc{} || end != value.data() + value.size() || parsed < minimum ||
       parsed > maximum) {
-    add_diagnostic(report, MigrationSeverity::kError, "legacy.config.invalid_integer",
-                   "/config/" + std::string(key),
-                   "Value '" + value + "' is not an integer in the supported range.",
-                   "Use a value from " + std::to_string(minimum) + " to " +
-                       std::to_string(maximum) + ".");
+    add_diagnostic(
+        report, MigrationSeverity::kError, "legacy.config.invalid_integer",
+        "/config/" + std::string(key),
+        "Value '" + value + "' is not an integer in the supported range.",
+        "Use a value from " + std::to_string(minimum) + " to " + std::to_string(maximum) + ".");
     return false;
   }
   destination = parsed;
@@ -86,9 +86,7 @@ std::string read_required_string(const LegacyConfig& config, std::string_view ke
 
 }  // namespace
 
-bool LegacySettingsReadResult::ok() const noexcept {
-  return settings.has_value() && report.ok();
-}
+bool LegacySettingsReadResult::ok() const noexcept { return settings.has_value() && report.ok(); }
 
 LegacySettingsReadResult decode_legacy_settings(const LegacyConfig& config) {
   LegacySettingsReadResult result;
@@ -150,13 +148,12 @@ LegacySettingsReadResult decode_legacy_settings(const LegacyConfig& config) {
   if (accounted < config.values.size()) {
     for (const auto& [key, value] : config.values) {
       (void)value;
-      const bool known = key == "days" || key == "maxlessons" || key == "sessions" ||
-                         key == "last_day_short" || key == "file" ||
-                         key == "classrooms_file" || key == "methodical_days_file" ||
-                         key == "physical_culture_name" || key == "days_of_the_week" ||
-                         key == "double_lessons" || key == "not_first_last" ||
-                         key == "entire_course_per_day" || key == "conflicts" ||
-                         std::ranges::find(kRuntimeOnlyKeys, key) != kRuntimeOnlyKeys.end();
+      const bool known =
+          key == "days" || key == "maxlessons" || key == "sessions" || key == "last_day_short" ||
+          key == "file" || key == "classrooms_file" || key == "methodical_days_file" ||
+          key == "physical_culture_name" || key == "days_of_the_week" || key == "double_lessons" ||
+          key == "not_first_last" || key == "entire_course_per_day" || key == "conflicts" ||
+          std::ranges::find(kRuntimeOnlyKeys, key) != kRuntimeOnlyKeys.end();
       if (!known) {
         ++result.report.ignored_fields;
         add_diagnostic(result.report, MigrationSeverity::kWarning, "legacy.config.unknown_key",

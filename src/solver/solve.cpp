@@ -8,6 +8,7 @@
 #include <ranges>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -227,6 +228,7 @@ SolveResult solve(const SolveRequest& request) {
   std::unordered_map<std::string, WeightedVariables> weekly_teacher_load;
   std::unordered_map<std::string, WeightedVariables> daily_teacher_load;
   std::unordered_map<std::string, std::vector<sat::BoolVar>> group_day_subjects;
+  std::unordered_map<std::string, std::vector<sat::BoolVar>> group_day_distributions;
   std::unordered_map<std::string, std::vector<std::size_t>> simultaneous_meetings;
 
   for (std::size_t meeting_index = 0; meeting_index < candidates.meetings.size(); ++meeting_index) {
@@ -248,6 +250,8 @@ SolveResult solve(const SolveRequest& request) {
         }
         group_day_subjects[subject_day_key(group.value(), day, meeting.subject.value())].push_back(
             mode);
+        group_day_distributions[subject_day_key(group.value(), day, meeting.distribution_key)]
+            .push_back(mode);
       }
       for (std::size_t lane = 0; lane < candidate.eligible_teachers_by_lane.size(); ++lane) {
         mode_variables.teachers_by_lane.emplace_back();
@@ -360,15 +364,35 @@ SolveResult solve(const SolveRequest& request) {
       }
     }
   }
+  std::unordered_set<std::string> constrained_distributions;
+  for (const domain::Meeting& meeting : request.project.meetings) {
+    const domain::Subject* subject = find_entity(request.project.subjects, meeting.subject);
+    if (subject == nullptr) {
+      continue;
+    }
+    for (const domain::StudentGroupId& group_id : meeting.groups) {
+      const domain::StudentGroup* group = find_entity(request.project.student_groups, group_id);
+      if (group == nullptr) {
+        continue;
+      }
+      for (std::size_t day = 0; day < request.project.calendar.days.size(); ++day) {
+        const std::string key = subject_day_key(group_id.value(), day, meeting.distribution_key);
+        if (!constrained_distributions.insert(key).second) {
+          continue;
+        }
+        const auto& occurrences = group_day_distributions[key];
+        const std::optional<int> occurrence_limit = daily_occurrence_limit(*subject, *group);
+        if (occurrence_limit && occurrences.size() > static_cast<std::size_t>(*occurrence_limit)) {
+          model.AddLessOrEqual(sat::LinearExpr::Sum(occurrences), *occurrence_limit);
+        }
+      }
+    }
+  }
   for (const domain::StudentGroup& group : request.project.student_groups) {
     for (std::size_t day = 0; day < request.project.calendar.days.size(); ++day) {
       for (const domain::Subject& subject : request.project.subjects) {
         const auto& occurrences =
             group_day_subjects[subject_day_key(group.id.value(), day, subject.id.value())];
-        const std::optional<int> occurrence_limit = daily_occurrence_limit(subject, group);
-        if (occurrence_limit && occurrences.size() > static_cast<std::size_t>(*occurrence_limit)) {
-          model.AddLessOrEqual(sat::LinearExpr::Sum(occurrences), *occurrence_limit);
-        }
         for (const domain::SubjectId& conflict_id : subject.conflicting_subjects) {
           if (subject.id.value() >= conflict_id.value()) {
             continue;
