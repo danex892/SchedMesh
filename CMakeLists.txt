@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(SchedMesh VERSION 0.1.0 LANGUAGES CXX)
+project(SchedMesh VERSION 0.1.0 LANGUAGES C CXX)
 
 find_package(Threads)
 
@@ -120,8 +120,26 @@ if(NOT TARGET pugixml::pugixml)
     message(FATAL_ERROR "pugixml 1.16 is required.")
 endif()
 
+if(SCHEDMESH_FETCH_DEPENDENCIES)
+    include(FetchContent)
+    set(BUILD_TESTS OFF CACHE BOOL "Build libxlsxwriter tests" FORCE)
+    set(BUILD_EXAMPLES OFF CACHE BOOL "Build libxlsxwriter examples" FORCE)
+    set(USE_NO_MD5 ON CACHE BOOL "Disable unused libxlsxwriter image deduplication" FORCE)
+    FetchContent_Declare(
+        libxlsxwriter
+        GIT_REPOSITORY https://github.com/jmcnamara/libxlsxwriter.git
+        GIT_TAG 2894634d65cee6021901a165bfc2bb0fad6da193
+    )
+    FetchContent_MakeAvailable(libxlsxwriter)
+endif()
+
+if(NOT TARGET xlsxwriter)
+    message(FATAL_ERROR "libxlsxwriter 1.2.4 is required. Enable SCHEDMESH_FETCH_DEPENDENCIES.")
+endif()
+
 add_executable(schedmesh-next
     src/app/main.cpp
+    src/app/export_command.cpp
     src/app/migrate_command.cpp
     src/app/solve_command.cpp
     src/app/validate_command.cpp
@@ -155,6 +173,16 @@ schedmesh_enable_warnings(schedmesh-domain)
 schedmesh_enable_clang_tidy(schedmesh-domain)
 target_link_libraries(schedmesh-next PRIVATE schedmesh-domain)
 
+add_library(schedmesh-export
+    src/export/xlsx_exporter.cpp
+)
+target_include_directories(schedmesh-export PUBLIC include)
+target_compile_features(schedmesh-export PUBLIC cxx_std_20)
+target_link_libraries(schedmesh-export PUBLIC schedmesh-domain PRIVATE xlsxwriter)
+schedmesh_enable_warnings(schedmesh-export)
+schedmesh_enable_clang_tidy(schedmesh-export)
+target_link_libraries(schedmesh-next PRIVATE schedmesh-export)
+
 add_library(schedmesh-solver
     src/solver/candidate_preprocessor.cpp
     src/solver/solve.cpp
@@ -187,14 +215,17 @@ if(SCHEDMESH_BUILD_TESTS)
         tests/solver/candidate_preprocessor_test.cpp
         tests/solver/solve_test.cpp
         tests/app/solve_command_test.cpp
+        tests/app/export_command_test.cpp
         tests/solver/smoke_solver_test.cpp
         src/solver/smoke_solver.cpp
         src/app/solve_command.cpp
+        src/app/export_command.cpp
         src/app/migrate_command.cpp
     )
     target_include_directories(schedmesh-next-tests PRIVATE include tests)
     target_compile_features(schedmesh-next-tests PRIVATE cxx_std_20)
-    target_link_libraries(schedmesh-next-tests PRIVATE GTest::gtest ortools::ortools schedmesh-solver)
+    target_link_libraries(schedmesh-next-tests PRIVATE GTest::gtest ortools::ortools schedmesh-solver
+                                                       schedmesh-export)
     schedmesh_enable_warnings(schedmesh-next-tests)
     schedmesh_copy_runtime_dependencies(schedmesh-next-tests)
     schedmesh_enable_clang_tidy(schedmesh-next-tests)
@@ -204,7 +235,9 @@ if(SCHEDMESH_BUILD_TESTS)
         tests/app/migrate_command_test.cpp
         tests/app/validate_command_test.cpp
         tests/domain/domain_test.cpp
+        tests/export/xlsx_exporter_test.cpp
         tests/io/project_json_test.cpp
+        tests/io/schedule_json_test.cpp
         tests/import/legacy_text_test.cpp
         tests/import/xhstt_test.cpp
         tests/import/legacy_settings_test.cpp
@@ -218,7 +251,8 @@ if(SCHEDMESH_BUILD_TESTS)
     )
     target_include_directories(schedmesh-domain-tests PRIVATE tests)
     target_compile_features(schedmesh-domain-tests PRIVATE cxx_std_20)
-    target_link_libraries(schedmesh-domain-tests PRIVATE GTest::gtest schedmesh-domain)
+    target_link_libraries(schedmesh-domain-tests PRIVATE GTest::gtest schedmesh-domain
+                                                       schedmesh-export nlohmann_json::nlohmann_json)
     schedmesh_enable_warnings(schedmesh-domain-tests)
     schedmesh_enable_clang_tidy(schedmesh-domain-tests)
 

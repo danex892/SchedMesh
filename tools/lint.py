@@ -14,8 +14,8 @@ from install_dev import msvc_environment
 
 
 COMPILE_DATABASE = Path(".tools/build/compile_commands.json")
-SOURCE_ROOTS = (Path("src/app"), Path("src/domain"), Path("src/import"), Path("src/io"),
-                Path("src/solver"), Path("src/validation"), Path("tests"))
+SOURCE_ROOTS = (Path("src/app"), Path("src/domain"), Path("src/export"), Path("src/import"),
+                Path("src/io"), Path("src/solver"), Path("src/validation"), Path("tests"))
 
 
 def translation_units() -> list[Path]:
