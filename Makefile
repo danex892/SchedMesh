@@ -1,4 +1,4 @@
-.PHONY: install-dev lint format
+.PHONY: install-dev lint format example
 
 PYTHON ?= python
 
@@ -10,3 +10,7 @@ lint:
 
 format:
 	$(PYTHON) tools/format.py
+
+example:
+	cmake --build .tools/build --config Release
+	$(PYTHON) tools/legacy_example.py

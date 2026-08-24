@@ -81,6 +81,8 @@ cmake --build --preset next-release
 .\build\next\Release\schedmesh-next.exe migrate-legacy data\settings.conf outputs\project.json
 .\build\next\Release\schedmesh-next.exe solve outputs\project.json outputs\schedule.json `
   --time-limit-ms 30000 --workers 1 --seed 1
+.\build\next\Release\schedmesh-next.exe export-xlsx outputs\project.json `
+  outputs\schedule.json outputs\timetable.xlsx
 ```
 
 `migrate-legacy` reads the timetable, classroom mapping, and optional methodical-day
@@ -91,12 +93,16 @@ facility identity cannot be inferred are reported as warnings for manual review.
 `solve` runs deterministic fixed-staffing CP-SAT feasibility by default, independently
 validates every returned schedule, and writes schedule JSON only for a valid feasible
 or optimal result. See [M3 acceptance evidence](docs/M3_ACCEPTANCE.md) for current
-coverage and the bounded historical baseline.
+coverage and the solved historical acceptance fixture.
 
 M4 completes canonical room reconstruction, per-lane capacity and feature enforcement,
 simultaneous subgroup room lanes, and the preserved gym sharing rule. The public Medium
 fixture is defined in `tests/fixtures/medium_project.h`; see
 [M4 acceptance evidence](docs/M4_ACCEPTANCE.md).
+
+Run `make example` to migrate and solve the anonymized built-in school dataset and export its
+validated schedule to a formatted XLSX workbook. Its legacy subgroup and profile semantics are
+documented in [the built-in example guide](docs/LEGACY_EXAMPLE.md).
 
 The legacy generator remains available at:
 

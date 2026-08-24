@@ -17,10 +17,10 @@ the same or adjacent grades. The legacy `T` code becomes a dedicated `technology
 mapped teacher, preserving the old absence of cross-teacher workshop contention. Migration emits
 an explicit warning because private facility identities must still be confirmed by the school.
 
-The public historical migration now produces 41 rooms and 947 meetings with no roomless meetings.
+The public historical migration now produces 41 rooms and 952 meetings with no roomless meetings.
 It contains both alternative and feature-constrained room lanes. The deterministic room audit
 finds no aggregate candidate-pool capacity overload, so a simple classroom shortage does not
-explain the remaining proven-infeasible baseline.
+constrain the corrected fixture beyond feasibility.
 
 ## Public Medium fixture
 
@@ -41,11 +41,12 @@ coverage and no proven aggregate overload.
 
 The full local suite builds with the repository-managed clang-cl/Ninja toolchain. Formatting and
 clang-tidy cover every production and test translation unit. CTest covers the Medium fixture,
-historical migration, the bounded historical infeasible baseline, capacity boundaries, feature
+historical migration and solve, capacity boundaries, feature
 selection, subgroup lanes, room identity, gym compatibility, cancellation, and independent
 schedule validation.
 
-M4 does not claim an explanation for the remaining global historical infeasibility. Assumption
-groups, bounded core shrinking, relaxation analysis, and `schedmesh explain` belong to M5. The
-special-room reconstruction also remains visibly marked for confirmation against the private
-facility inventory rather than being presented as undisputed source data.
+The built-in fixture now solves after preserving legacy subgroup and profile semantics explicitly.
+Assumption groups, bounded core shrinking, relaxation analysis, and `schedmesh explain` still
+belong to M5 for genuinely infeasible projects. The special-room reconstruction also remains
+visibly marked for confirmation against a real facility inventory rather than being presented as
+undisputed source data.

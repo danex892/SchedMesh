@@ -9,11 +9,11 @@ solver layer and does not inherit the legacy fixed array limits.
 Migrating `data/settings.conf` twice produces byte-identical canonical JSON with:
 
 - 6 days, 13 global periods, and 78 slots;
-- 27 student groups;
+- 29 scheduling groups representing 27 classes and two parallel profile splits;
 - 39 teachers;
-- 40 subjects;
-- 37 explicit rooms;
-- 947 meeting occurrences covering 964 teaching periods.
+- 41 subjects;
+- 41 explicit rooms;
+- 952 meeting occurrences covering 969 teaching periods.
 
 The migration report explicitly warns about `S` and `T` room codes because they do
 not identify concrete facilities. It also reports `entire_course_per_day` as ignored:

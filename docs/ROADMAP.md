@@ -129,8 +129,8 @@ SchedMesh may be tagged `v1.0.0` when all of the following are true:
 - Validate every returned schedule independently before exposing it to the UI.
 
 **Exit evidence:** all Tiny feasibility boundaries pass, cancellation and deadlines are bounded,
-and every returned schedule passes independent validation. The preserved historical baseline is
-proven infeasible under reconstructed M3 semantics and remains an explicit M4 investigation.
+and every returned schedule passes independent validation. The anonymized historical fixture now
+solves after its subgroup courses and parallel profile curricula are represented explicitly.
 
 ### M4 — Rooms and Full Historical Hard Rules
 

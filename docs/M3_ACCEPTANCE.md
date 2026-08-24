@@ -34,14 +34,14 @@ schedmesh-next solve <project.json> <schedule.json> \
 It prints status, elapsed milliseconds, branches, and conflicts. Schedule JSON is written only
 after independent validation succeeds.
 
-## Historical baseline
+## Historical acceptance
 
-The public legacy dataset migrates deterministically into 947 meeting occurrences covering 964
-teaching periods. With one worker, seed 1, and a 30-second budget, the M3 model proves the
-reconstructed project infeasible and does not emit a schedule. The preserved legacy generator
-also failed to complete this dataset.
+The public legacy dataset now migrates deterministically into 952 meeting occurrences covering 969
+teaching periods. The importer preserves simultaneous English and Informatics subgroups, separate
+courses of the same subject, and the two parallel profile curricula encoded by slash-separated
+hours. With one worker and seed 1, the acceptance project solves within the 30-second test budget,
+writes a schedule, and passes independent validation.
 
-This is a recorded baseline, not a fabricated success. M4 subsequently reconstructs ambiguous
-room identities and full room semantics without changing that outcome. M5 owns bounded
-rule-family diagnostics for the remaining global infeasibility; a validator-approved historical
-schedule remains required before the release acceptance milestone.
+The old greedy generator did not complete this dataset. The earlier CP-SAT infeasibility was also
+real for the model it received, but that model had incorrectly serialized parallel profile hours as
+sequential whole-class hours. The acceptance test now protects the corrected interpretation.
