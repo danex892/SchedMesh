@@ -101,11 +101,31 @@ if(NOT TARGET nlohmann_json::nlohmann_json)
     message(FATAL_ERROR "nlohmann/json 3.12 is required.")
 endif()
 
+find_package(pugixml 1.16 CONFIG QUIET)
+if(NOT pugixml_FOUND AND SCHEDMESH_FETCH_DEPENDENCIES)
+    include(FetchContent)
+    set(PUGIXML_BUILD_TESTS OFF CACHE BOOL "Build pugixml tests" FORCE)
+    set(PUGIXML_NO_EXCEPTIONS ON CACHE BOOL "Build pugixml without exceptions" FORCE)
+    set(PUGIXML_NO_XPATH ON CACHE BOOL "Build pugixml without XPath" FORCE)
+    FetchContent_Declare(
+        pugixml
+        URL https://github.com/zeux/pugixml/releases/download/v1.16/pugixml-1.16.tar.gz
+        URL_HASH SHA256=4CEE1CA4AAD395170F4C7A07824F3BDD41F28316C6E1E1090A1425B278EC0B4B
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    FetchContent_MakeAvailable(pugixml)
+endif()
+
+if(NOT TARGET pugixml::pugixml)
+    message(FATAL_ERROR "pugixml 1.16 is required.")
+endif()
+
 add_executable(schedmesh-next
     src/app/main.cpp
     src/app/migrate_command.cpp
     src/app/solve_command.cpp
     src/app/validate_command.cpp
+    src/app/xhstt_command.cpp
 )
 target_include_directories(schedmesh-next PRIVATE include)
 target_compile_features(schedmesh-next PRIVATE cxx_std_20)
@@ -120,6 +140,7 @@ add_library(schedmesh-domain
     src/import/legacy_project.cpp
     src/import/legacy_settings.cpp
     src/import/legacy_text.cpp
+    src/import/xhstt.cpp
     src/io/project_json.cpp
     src/io/schedule_json.cpp
     src/validation/objective_evaluator.cpp
@@ -129,7 +150,7 @@ add_library(schedmesh-domain
 )
 target_include_directories(schedmesh-domain PUBLIC include)
 target_compile_features(schedmesh-domain PUBLIC cxx_std_20)
-target_link_libraries(schedmesh-domain PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(schedmesh-domain PRIVATE nlohmann_json::nlohmann_json pugixml::pugixml)
 schedmesh_enable_warnings(schedmesh-domain)
 schedmesh_enable_clang_tidy(schedmesh-domain)
 target_link_libraries(schedmesh-next PRIVATE schedmesh-domain)
@@ -185,6 +206,7 @@ if(SCHEDMESH_BUILD_TESTS)
         tests/domain/domain_test.cpp
         tests/io/project_json_test.cpp
         tests/import/legacy_text_test.cpp
+        tests/import/xhstt_test.cpp
         tests/import/legacy_settings_test.cpp
         tests/import/legacy_project_test.cpp
         tests/validation/project_validator_test.cpp

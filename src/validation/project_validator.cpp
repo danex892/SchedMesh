@@ -187,11 +187,11 @@ ValidationResult ProjectValidator::validate(const domain::Project& project) cons
     const std::string path = "/subjects/" + std::to_string(index);
     validate_references(subject.conflicting_subjects, subject_ids, path + "/conflicting_subjects",
                         subject.id.value(), "subject", result);
-    if (subject.required_consecutive_periods <= 0) {
+    if (subject.required_consecutive_periods < 0) {
       add_error(result, "subject.invalid_consecutive_periods",
                 path + "/required_consecutive_periods",
-                "Required consecutive period count must be positive.", subject.id.value(),
-                "Use a value of at least one period.");
+                "Required consecutive period count cannot be negative.", subject.id.value(),
+                "Use zero for meeting-defined durations or a positive fixed duration.");
     }
     if (subject.maximum_occurrences_per_day && *subject.maximum_occurrences_per_day <= 0) {
       add_error(result, "subject.invalid_daily_occurrence_limit",
@@ -260,7 +260,7 @@ ValidationResult ProjectValidator::validate(const domain::Project& project) cons
                 "Use a subject declared in this project.");
     }
     const domain::Subject* meeting_subject = find_entity(project.subjects, meeting.subject);
-    if (meeting_subject != nullptr &&
+    if (meeting_subject != nullptr && meeting_subject->required_consecutive_periods > 0 &&
         meeting.duration_in_periods != meeting_subject->required_consecutive_periods) {
       add_error(result, "meeting.subject_duration_mismatch", path + "/duration_in_periods",
                 "Meeting duration does not match the subject's consecutive-period requirement.",
