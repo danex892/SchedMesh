@@ -2,12 +2,14 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <stop_token>
 
 #include "fixtures/medium_project.h"
 #include "fixtures/tiny_project.h"
 #include "schedmesh/validation/room_audit.h"
+#include "schedmesh/validation/schedule_validator.h"
 
 namespace schedmesh::solver {
 namespace {
@@ -29,6 +31,12 @@ domain::Project project_with_calendar(std::vector<domain::Day> days,
 domain::Project one_day_two_period_project() {
   return project_with_calendar({{.id = "mon", .display_name = "Day 1", .ordinal = 0}},
                                {{.id = "p1", .ordinal = 0}, {.id = "p2", .ordinal = 1}});
+}
+
+domain::Project one_day_three_period_project() {
+  return project_with_calendar(
+      {{.id = "mon", .display_name = "Day 1", .ordinal = 0}},
+      {{.id = "p1", .ordinal = 0}, {.id = "p2", .ordinal = 1}, {.id = "p3", .ordinal = 2}});
 }
 
 domain::Project two_day_project() {
@@ -262,6 +270,81 @@ TEST(SolveTest, ProvesRepeatedSubjectOnOneDayInfeasible) {
   const SolveResult result = solve({.project = project});
 
   EXPECT_EQ(result.status, SolveStatus::kInfeasible);
+}
+
+TEST(SolveTest, AppliesSubjectSpecificDailyOccurrenceLimit) {
+  domain::Project project = one_day_three_period_project();
+  project.student_groups.front().allow_repeated_subjects_per_day = true;
+  project.subjects.front().maximum_occurrences_per_day = 2;
+  add_second_meeting(project);
+
+  const SolveResult two_occurrences = solve({.project = project});
+
+  EXPECT_EQ(two_occurrences.status, SolveStatus::kOptimal);
+  domain::Meeting third = project.meetings.front();
+  third.id = domain::MeetingId{"meeting-003"};
+  project.meetings.push_back(std::move(third));
+
+  const SolveResult three_occurrences = solve({.project = project});
+
+  EXPECT_EQ(three_occurrences.status, SolveStatus::kInfeasible);
+}
+
+TEST(SolveTest, StartsLinkedMeetingsSimultaneously) {
+  constexpr int kMaximumWeeklyLoad = 20;
+  constexpr int kRoomCapacity = 30;
+  domain::Project project = one_day_two_period_project();
+  project.teachers.push_back({.id = domain::TeacherId{"teacher-002"},
+                              .display_name = "Teacher 2",
+                              .qualified_subjects = {domain::SubjectId{"subject-math"}},
+                              .maximum_weekly_load = kMaximumWeeklyLoad});
+  project.student_groups.push_back({.id = domain::StudentGroupId{"group-02"},
+                                    .display_name = "Group 2",
+                                    .allowed_slots = project.student_groups.front().allowed_slots});
+  project.rooms.push_back(
+      {.id = domain::RoomId{"room-002"}, .display_name = "Room 2", .capacity = kRoomCapacity});
+  project.meetings.front().simultaneity_keys = {"linked-lessons"};
+  domain::Meeting second = project.meetings.front();
+  second.id = domain::MeetingId{"meeting-002"};
+  second.groups = {domain::StudentGroupId{"group-02"}};
+  second.teacher_requirements.front().fixed_teacher = domain::TeacherId{"teacher-002"};
+  second.room_requirements.front().fixed_room = domain::RoomId{"room-002"};
+  project.meetings.push_back(std::move(second));
+
+  const SolveResult result = solve({.project = project});
+
+  ASSERT_EQ(result.status, SolveStatus::kOptimal);
+  ASSERT_TRUE(result.schedule.has_value());
+  ASSERT_EQ(result.schedule->meetings.size(), 2U);
+  EXPECT_EQ(result.schedule->meetings[0].start_slot, result.schedule->meetings[1].start_slot);
+
+  domain::Schedule broken = *result.schedule;
+  broken.meetings[1].start_slot = broken.meetings[0].start_slot == domain::SlotId{"slot-mon-p1"}
+                                      ? domain::SlotId{"slot-mon-p2"}
+                                      : domain::SlotId{"slot-mon-p1"};
+  const validation::ValidationResult validation =
+      validation::ScheduleValidator{}.validate(project, broken);
+  EXPECT_TRUE(std::ranges::any_of(validation.diagnostics, [](const auto& diagnostic) {
+    return diagnostic.code == "schedule.simultaneity_violation";
+  }));
+}
+
+TEST(SolveTest, AllowsCoTeachersToShareOneIndependentRoomLane) {
+  domain::Project project = test::make_tiny_project();
+  project.teachers.push_back({.id = domain::TeacherId{"teacher-002"},
+                              .display_name = "Teacher 2",
+                              .qualified_subjects = {domain::SubjectId{"subject-math"}},
+                              .maximum_weekly_load = 1});
+  project.meetings.front().teacher_requirements.push_back(
+      {.fixed_teacher = domain::TeacherId{"teacher-002"}, .lane = 1});
+  project.meetings.front().resource_lanes_aligned = false;
+
+  const SolveResult result = solve({.project = project});
+
+  ASSERT_EQ(result.status, SolveStatus::kOptimal);
+  ASSERT_TRUE(result.schedule.has_value());
+  EXPECT_EQ(result.schedule->meetings.front().teachers.size(), 2U);
+  EXPECT_EQ(result.schedule->meetings.front().rooms.size(), 1U);
 }
 
 TEST(SolveTest, SeparatesConflictingSubjectsAcrossDays) {

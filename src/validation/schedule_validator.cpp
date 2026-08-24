@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -61,6 +62,17 @@ std::string occupancy_key(std::string_view resource_id, const domain::SlotId& sl
   return result;
 }
 
+std::optional<int> daily_occurrence_limit(const domain::Subject& subject,
+                                          const domain::StudentGroup& group) {
+  if (subject.maximum_occurrences_per_day) {
+    return subject.maximum_occurrences_per_day;
+  }
+  if (!group.allow_repeated_subjects_per_day) {
+    return 1;
+  }
+  return std::nullopt;
+}
+
 }  // namespace
 
 ValidationResult ScheduleValidator::validate(const domain::Project& project,
@@ -79,6 +91,7 @@ ValidationResult ScheduleValidator::validate(const domain::Project& project,
   std::map<std::pair<domain::TeacherId, std::size_t>, int> daily_teacher_load;
   std::map<std::pair<domain::StudentGroupId, std::size_t>, std::vector<domain::SubjectId>>
       group_day_subjects;
+  std::map<std::string, domain::SlotId, std::less<>> simultaneity_starts;
 
   for (std::size_t index = 0; index < schedule.meetings.size(); ++index) {
     const domain::ScheduledMeeting& assignment = schedule.meetings[index];
@@ -110,6 +123,14 @@ ValidationResult ScheduleValidator::validate(const domain::Project& project,
                 "Choose a start slot that fits the full meeting duration.");
       continue;
     }
+    for (const std::string& key : meeting->simultaneity_keys) {
+      const auto [linked, inserted] = simultaneity_starts.emplace(key, assignment.start_slot);
+      if (!inserted && linked->second != assignment.start_slot) {
+        add_error(result, "schedule.simultaneity_violation", path + "/start_slot",
+                  "Linked meetings do not start simultaneously.", assignment.meeting.value(),
+                  "Assign every meeting with this simultaneity key to the same start slot.");
+      }
+    }
 
     if (assignment.teachers.size() != meeting->teacher_requirements.size()) {
       add_error(result, "schedule.teacher_lane_count", path + "/teachers",
@@ -139,10 +160,12 @@ ValidationResult ScheduleValidator::validate(const domain::Project& project,
       auto& subjects = group_day_subjects[{group_id, start->day_index}];
       const domain::Subject* subject = find_entity(project.subjects, meeting->subject);
       if (group != nullptr && subject != nullptr) {
-        if (!group->allow_repeated_subjects_per_day && contains(subjects, subject->id)) {
+        const auto scheduled_occurrences = std::ranges::count(subjects, subject->id);
+        const std::optional<int> occurrence_limit = daily_occurrence_limit(*subject, *group);
+        if (occurrence_limit && scheduled_occurrences >= *occurrence_limit) {
           add_error(result, "schedule.repeated_subject_on_day", path + "/start_slot",
-                    "Student group repeats a subject on the same day.", group_id.value(),
-                    "Move one occurrence to another day or enable the group policy.");
+                    "Student group exceeds the subject's daily occurrence limit.", group_id.value(),
+                    "Move one occurrence to another day or relax the policy.");
         }
         if (std::ranges::any_of(subjects, [&](const domain::SubjectId& scheduled_subject) {
               return contains(subject->conflicting_subjects, scheduled_subject);

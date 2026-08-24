@@ -13,6 +13,7 @@ struct Subject {
   SubjectId id;
   std::string display_name;
   int required_consecutive_periods{1};
+  std::optional<int> maximum_occurrences_per_day;
   bool forbid_first_period{};
   bool forbid_last_period{};
   std::vector<SubjectId> conflicting_subjects;

@@ -193,6 +193,12 @@ ValidationResult ProjectValidator::validate(const domain::Project& project) cons
                 "Required consecutive period count must be positive.", subject.id.value(),
                 "Use a value of at least one period.");
     }
+    if (subject.maximum_occurrences_per_day && *subject.maximum_occurrences_per_day <= 0) {
+      add_error(result, "subject.invalid_daily_occurrence_limit",
+                path + "/maximum_occurrences_per_day",
+                "Maximum daily occurrence count must be positive.", subject.id.value(),
+                "Use a positive limit or omit the subject-specific policy.");
+    }
     for (std::size_t conflict_index = 0; conflict_index < subject.conflicting_subjects.size();
          ++conflict_index) {
       const domain::SubjectId& conflicting_id = subject.conflicting_subjects[conflict_index];
@@ -264,11 +270,6 @@ ValidationResult ProjectValidator::validate(const domain::Project& project) cons
                         "student group", result);
     validate_references(meeting.allowed_start_slots, slot_ids, path + "/allowed_start_slots",
                         meeting.id.value(), "slot", result);
-    if (meeting.groups.empty()) {
-      add_error(result, "meeting.no_groups", path + "/groups",
-                "Meeting must contain at least one student group.", meeting.id.value(),
-                "Assign a student group.");
-    }
     if (meeting.allowed_start_slots.empty()) {
       add_error(result, "meeting.no_allowed_slots", path + "/allowed_start_slots",
                 "Meeting must have at least one allowed start slot.", meeting.id.value(),
@@ -279,12 +280,26 @@ ValidationResult ProjectValidator::validate(const domain::Project& project) cons
                 "Meeting duration must be positive.", meeting.id.value(),
                 "Use a duration of at least one period.");
     }
+    std::set<std::string> simultaneity_keys;
+    for (std::size_t key_index = 0; key_index < meeting.simultaneity_keys.size(); ++key_index) {
+      const std::string& key = meeting.simultaneity_keys[key_index];
+      const std::string key_path = path + "/simultaneity_keys/" + std::to_string(key_index);
+      if (key.empty()) {
+        add_error(result, "meeting.empty_simultaneity_key", key_path,
+                  "Simultaneity key cannot be empty.", meeting.id.value(),
+                  "Remove the key or use a stable non-empty identifier.");
+      } else if (!simultaneity_keys.insert(key).second) {
+        add_error(result, "meeting.duplicate_simultaneity_key", key_path,
+                  "Meeting repeats the same simultaneity key.", meeting.id.value(),
+                  "Keep each simultaneity key only once per meeting.");
+      }
+    }
 
     validate_lanes(meeting.teacher_requirements, path + "/teacher_requirements", meeting.id.value(),
                    result);
     validate_lanes(meeting.room_requirements, path + "/room_requirements", meeting.id.value(),
                    result);
-    if (!meeting.room_requirements.empty() &&
+    if (meeting.resource_lanes_aligned && !meeting.room_requirements.empty() &&
         lane_ids(meeting.teacher_requirements) != lane_ids(meeting.room_requirements)) {
       add_error(result, "meeting.room_lane_mismatch", path + "/room_requirements",
                 "Room lanes must match teacher lanes when a meeting uses rooms.",

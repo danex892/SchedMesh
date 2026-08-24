@@ -4,6 +4,8 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
+#include <optional>
+#include <ranges>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -83,6 +85,17 @@ bool overlaps(const CandidateStart& first, const CandidateStart& second) {
   return std::ranges::any_of(first.occupied_slots, [&](const domain::SlotId& slot) {
     return std::ranges::find(second.occupied_slots, slot) != second.occupied_slots.end();
   });
+}
+
+std::optional<int> daily_occurrence_limit(const domain::Subject& subject,
+                                          const domain::StudentGroup& group) {
+  if (subject.maximum_occurrences_per_day) {
+    return subject.maximum_occurrences_per_day;
+  }
+  if (!group.allow_repeated_subjects_per_day) {
+    return 1;
+  }
+  return std::nullopt;
 }
 
 template <typename Id>
@@ -214,6 +227,7 @@ SolveResult solve(const SolveRequest& request) {
   std::unordered_map<std::string, WeightedVariables> weekly_teacher_load;
   std::unordered_map<std::string, WeightedVariables> daily_teacher_load;
   std::unordered_map<std::string, std::vector<sat::BoolVar>> group_day_subjects;
+  std::unordered_map<std::string, std::vector<std::size_t>> simultaneous_meetings;
 
   for (std::size_t meeting_index = 0; meeting_index < candidates.meetings.size(); ++meeting_index) {
     const MeetingCandidates& meeting_candidates = candidates.meetings[meeting_index];
@@ -262,7 +276,47 @@ SolveResult solve(const SolveRequest& request) {
       meeting_variables.modes.push_back(std::move(mode_variables));
     }
     model.AddExactlyOne(mode_selection);
+    for (const std::string& key : meeting.simultaneity_keys) {
+      simultaneous_meetings[key].push_back(meeting_index);
+    }
     variables.push_back(std::move(meeting_variables));
+  }
+
+  for (const auto& [key, meeting_indices] : simultaneous_meetings) {
+    static_cast<void>(key);
+    if (meeting_indices.size() < 2) {
+      continue;
+    }
+    const std::size_t first_index = meeting_indices.front();
+    for (const std::size_t linked_index : meeting_indices | std::views::drop(1)) {
+      for (std::size_t first_mode = 0; first_mode < variables[first_index].modes.size();
+           ++first_mode) {
+        const domain::SlotId& start =
+            variables[first_index].candidates->starts[first_mode].start_slot;
+        const auto linked = std::ranges::find_if(
+            variables[linked_index].candidates->starts,
+            [&](const CandidateStart& candidate) { return candidate.start_slot == start; });
+        if (linked == variables[linked_index].candidates->starts.end()) {
+          model.AddEquality(variables[first_index].modes[first_mode].selected, 0);
+        } else {
+          const std::size_t linked_mode =
+              static_cast<std::size_t>(linked - variables[linked_index].candidates->starts.begin());
+          model.AddEquality(variables[first_index].modes[first_mode].selected,
+                            variables[linked_index].modes[linked_mode].selected);
+        }
+      }
+      for (std::size_t linked_mode = 0; linked_mode < variables[linked_index].modes.size();
+           ++linked_mode) {
+        const domain::SlotId& start =
+            variables[linked_index].candidates->starts[linked_mode].start_slot;
+        const bool present_in_first = std::ranges::any_of(
+            variables[first_index].candidates->starts,
+            [&](const CandidateStart& candidate) { return candidate.start_slot == start; });
+        if (!present_in_first) {
+          model.AddEquality(variables[linked_index].modes[linked_mode].selected, 0);
+        }
+      }
+    }
   }
 
   add_no_overlap(model, group_occupancy);
@@ -311,8 +365,9 @@ SolveResult solve(const SolveRequest& request) {
       for (const domain::Subject& subject : request.project.subjects) {
         const auto& occurrences =
             group_day_subjects[subject_day_key(group.id.value(), day, subject.id.value())];
-        if (!group.allow_repeated_subjects_per_day && occurrences.size() > 1) {
-          model.AddLessOrEqual(sat::LinearExpr::Sum(occurrences), 1);
+        const std::optional<int> occurrence_limit = daily_occurrence_limit(subject, group);
+        if (occurrence_limit && occurrences.size() > static_cast<std::size_t>(*occurrence_limit)) {
+          model.AddLessOrEqual(sat::LinearExpr::Sum(occurrences), *occurrence_limit);
         }
         for (const domain::SubjectId& conflict_id : subject.conflicting_subjects) {
           if (subject.id.value() >= conflict_id.value()) {

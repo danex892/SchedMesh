@@ -106,12 +106,16 @@ domain::Calendar read_calendar(const Json& value) {
 Json subjects_json(const std::vector<domain::Subject>& subjects) {
   Json output = Json::array();
   for (const auto& subject : subjects) {
-    output.push_back(Json{{"conflicting_subjects", ids_json(subject.conflicting_subjects)},
-                          {"display_name", subject.display_name},
-                          {"forbid_first_period", subject.forbid_first_period},
-                          {"forbid_last_period", subject.forbid_last_period},
-                          {"id", id_json(subject.id)},
-                          {"required_consecutive_periods", subject.required_consecutive_periods}});
+    Json item{{"conflicting_subjects", ids_json(subject.conflicting_subjects)},
+              {"display_name", subject.display_name},
+              {"forbid_first_period", subject.forbid_first_period},
+              {"forbid_last_period", subject.forbid_last_period},
+              {"id", id_json(subject.id)},
+              {"required_consecutive_periods", subject.required_consecutive_periods}};
+    if (subject.maximum_occurrences_per_day) {
+      item["maximum_occurrences_per_day"] = *subject.maximum_occurrences_per_day;
+    }
+    output.push_back(std::move(item));
   }
   return output;
 }
@@ -184,15 +188,21 @@ Json room_requirements_json(const std::vector<domain::RoomRequirement>& requirem
 Json meetings_json(const std::vector<domain::Meeting>& meetings) {
   Json output = Json::array();
   for (const auto& meeting : meetings) {
-    output.push_back(
-        Json{{"allowed_start_slots", ids_json(meeting.allowed_start_slots)},
-             {"distribution_key", meeting.distribution_key},
-             {"duration_in_periods", meeting.duration_in_periods},
-             {"groups", ids_json(meeting.groups)},
-             {"id", id_json(meeting.id)},
-             {"room_requirements", room_requirements_json(meeting.room_requirements)},
-             {"subject", id_json(meeting.subject)},
-             {"teacher_requirements", teacher_requirements_json(meeting.teacher_requirements)}});
+    Json item{{"allowed_start_slots", ids_json(meeting.allowed_start_slots)},
+              {"distribution_key", meeting.distribution_key},
+              {"duration_in_periods", meeting.duration_in_periods},
+              {"groups", ids_json(meeting.groups)},
+              {"id", id_json(meeting.id)},
+              {"room_requirements", room_requirements_json(meeting.room_requirements)},
+              {"subject", id_json(meeting.subject)},
+              {"teacher_requirements", teacher_requirements_json(meeting.teacher_requirements)}};
+    if (!meeting.simultaneity_keys.empty()) {
+      item["simultaneity_keys"] = meeting.simultaneity_keys;
+    }
+    if (!meeting.resource_lanes_aligned) {
+      item["resource_lanes_aligned"] = false;
+    }
+    output.push_back(std::move(item));
   }
   return output;
 }
@@ -209,6 +219,10 @@ domain::Project read_project(const Json& root) {
         {.id = read_id<domain::SubjectId>(item.at("id")),
          .display_name = item.at("display_name").get<std::string>(),
          .required_consecutive_periods = item.at("required_consecutive_periods").get<int>(),
+         .maximum_occurrences_per_day =
+             item.contains("maximum_occurrences_per_day")
+                 ? std::optional<int>{item.at("maximum_occurrences_per_day").get<int>()}
+                 : std::nullopt,
          .forbid_first_period = item.at("forbid_first_period").get<bool>(),
          .forbid_last_period = item.at("forbid_last_period").get<bool>(),
          .conflicting_subjects = read_ids<domain::SubjectId>(item.at("conflicting_subjects"))});
@@ -248,7 +262,9 @@ domain::Project read_project(const Json& root) {
         .groups = read_ids<domain::StudentGroupId>(item.at("groups")),
         .allowed_start_slots = read_ids<domain::SlotId>(item.at("allowed_start_slots")),
         .duration_in_periods = item.at("duration_in_periods").get<int>(),
-        .distribution_key = item.at("distribution_key").get<std::string>()};
+        .distribution_key = item.at("distribution_key").get<std::string>(),
+        .simultaneity_keys = item.value("simultaneity_keys", std::vector<std::string>{}),
+        .resource_lanes_aligned = item.value("resource_lanes_aligned", true)};
     for (const auto& requirement : item.at("teacher_requirements")) {
       meeting.teacher_requirements.push_back(
           {.fixed_teacher = requirement.at("fixed_teacher").is_null()

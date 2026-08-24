@@ -25,6 +25,22 @@ TEST(ProjectJsonTest, RoundTripsTinyProjectByteStably) {
   EXPECT_EQ(first.back(), '\n');
 }
 
+TEST(ProjectJsonTest, RoundTripsOptionalSubjectDailyOccurrenceLimit) {
+  domain::Project project = test::make_tiny_project();
+  project.subjects.front().maximum_occurrences_per_day = 2;
+  project.meetings.front().simultaneity_keys = {"linked-lessons"};
+  project.meetings.front().resource_lanes_aligned = false;
+
+  const ProjectReadResult parsed = read_project_json(write_project_json(project));
+
+  ASSERT_TRUE(parsed.ok());
+  ASSERT_TRUE(parsed.project.has_value());
+  EXPECT_EQ(parsed.project->subjects.front().maximum_occurrences_per_day, 2);
+  EXPECT_EQ(parsed.project->meetings.front().simultaneity_keys,
+            (std::vector<std::string>{"linked-lessons"}));
+  EXPECT_FALSE(parsed.project->meetings.front().resource_lanes_aligned);
+}
+
 TEST(ProjectJsonTest, PublicFixtureMatchesCanonicalWriterByteForByte) {
   const auto fixture = std::filesystem::path{"tests"} / "fixtures" / "tiny_project.json";
   std::ifstream input(fixture, std::ios::binary);

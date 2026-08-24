@@ -32,6 +32,8 @@ struct Meeting {
   std::vector<SlotId> allowed_start_slots;
   int duration_in_periods{1};
   std::string distribution_key;
+  std::vector<std::string> simultaneity_keys;
+  bool resource_lanes_aligned{true};
 };
 
 }  // namespace schedmesh::domain
