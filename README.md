@@ -63,6 +63,28 @@ Apply the repository formatting rules:
 make format
 ```
 
+Download the selected public XHSTT school-timetabling datasets into the ignored
+`.tools/testdata` directory. The archive and every extracted XML file are verified
+against pinned SHA-256 checksums:
+
+```powershell
+make download-testdata
+```
+
+Build the CLI, import all downloaded projects, validate their published schedules,
+generate fresh schedules, validate every generated result, and export each feasible timetable
+to XLSX:
+
+```powershell
+make benchmark
+```
+
+Four datasets must solve optimally within their individual budgets and produce `timetable.xlsx`
+under their ignored benchmark output directories. Netherlands GEPRO
+must reproduce its documented reference overlap and prove the corresponding hard model
+infeasible. Generated projects, schedules, and statistics remain under
+`.tools/benchmarks`.
+
 The commands prefer LLVM from `.tools/`, then `CLANG_FORMAT`/`CLANG_TIDY`, `PATH`,
 and the conventional Windows LLVM installation. `make install-dev` currently
 supports Windows; on other systems install LLVM and Ninja with the package manager.
